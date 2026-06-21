@@ -34,12 +34,16 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 > all work. A momentary swap glitch was fixed (synth reset + device pause during rebuild, PRs #18–#19).
 
 ## P2 — Lyric telop
-- [ ] Parse KAR/XF lyric + timing events in Core.
-- [ ] Two-line color-wipe telop synced to playback (Win2D/SkiaSharp).
-- [ ] Guide-melody on/off.
+- [x] Parse KAR/XF lyric + timing events in Core (`MidiSong.Lyrics`; `LyricTelopBuilder`
+      groups into `TelopLine`/`TelopSyllable`; `TelopPlayback` wipe helper). PR #20.
+- [x] Two-line color-wipe telop synced to playback (native gradient wipe; `ITelopSource`
+      + `DisplayViewModel` 30 fps). PR #21. (Needs owner runtime visual check.)
+- [ ] Guide-melody on/off. (App: play the melody track audibly; toggle.)
 
 ## P3 — Mic & pitch
-- [ ] WASAPI mic capture (App) feeding a Core `PitchDetector` (MPM/YIN).
+- [x] Core `PitchDetector` (McLeod/MPM): `IPitchDetector`/`McLeodPitchDetector`,
+      `PitchResult`. 25 tests. PR #22.
+- [ ] WASAPI mic capture (App) feeding the Core `PitchDetector`.
 - [ ] Real-time pitch bar vs reference melody on the display window.
 - [ ] Latency calibration between synthesized backing and mic.
 
