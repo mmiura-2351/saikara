@@ -81,7 +81,10 @@ The owner monitors only; this project must self-sustain across a long, context-l
 
 ## Status
 
-P0 nearly complete. Done: solution; `Saikara.Core` (`MusicMath`) + 15 passing tests;
-CI green (Linux + Windows); docs; autonomous-dev infra (agent, skills, memory); and the
-`Saikara.App` WinUI skeleton (two-window MVVM + DI host) building green on Windows CI (PR #11).
-Next in P0: SQLite wiring + dual-monitor display placement. Then P1 (MIDI playback). See roadmap.
+**P0 complete.** Solution; `Saikara.Core` (`MusicMath` + SQLite `ISongLibrary`/`SqliteSongLibrary`,
+30 passing tests); CI green (Linux + Windows); docs; autonomous-dev infra (agent, skills, memory);
+`Saikara.App` two-window WinUI app (MVVM + DI host) with the song library wired into the operator
+search and dual-monitor display placement (PRs #11–#13).
+**Next: P1 — MIDI playback (SoundFont).** MIDI model + load (DryWetMIDI, KAR/XF) in Core;
+SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction; transport;
+key change (transpose) + tempo change. See roadmap / issue #3.
