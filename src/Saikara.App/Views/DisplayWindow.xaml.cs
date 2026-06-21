@@ -33,6 +33,14 @@ public sealed partial class DisplayWindow : Window
     /// <summary>View-model bound by the XAML via <c>x:Bind</c>.</summary>
     public DisplayViewModel ViewModel { get; }
 
+    /// <summary>
+    /// x:Bind visibility helper for the scoring-result overlay: maps the VM's
+    /// <see cref="DisplayViewModel.IsResultVisible"/> flag to a <see cref="Visibility"/>. A static
+    /// function keeps the binding converter-free (no <c>IValueConverter</c>).
+    /// </summary>
+    public static Visibility BoolToVisibility(bool value) =>
+        value ? Visibility.Visible : Visibility.Collapsed;
+
     public DisplayWindow(DisplayViewModel viewModel)
     {
         ViewModel = viewModel;
