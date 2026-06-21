@@ -289,16 +289,23 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
         TimeSpan target = Clamp(position, TimeSpan.Zero, _duration);
         bool wasPlaying = _state == PlaybackState.Playing;
 
-        // Pause the pull side so the fast-forward render is not also consumed by the device.
+        // Pause the pull side, and the device itself, so the synchronous fast-forward below is
+        // neither consumed by nor starves the render thread (an underrun is heard as a momentary
+        // glitch). The device is resumed after the swap completes.
         lock (_renderLock)
         {
             _sampleProvider!.IsRendering = false;
+        }
+        if (wasPlaying)
+        {
+            _output!.Pause();
         }
 
         BuildAndLoadSequence(target);
 
         if (wasPlaying)
         {
+            _output!.Play();
             lock (_renderLock)
             {
                 _sampleProvider!.IsRendering = true;
@@ -394,6 +401,14 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
             {
                 _sampleProvider!.IsRendering = false;
             }
+
+            // Pause the device across the synchronous rebuild/fast-forward below. While the UI
+            // thread holds the render lock to swap the sequence, a still-running device starves
+            // and underruns, which is heard as a momentary glitch. Resumed after the swap.
+            if (wasPlaying)
+            {
+                _output!.Pause();
+            }
         }
 
         // Re-derive at the same wall-clock position. For a key change the timeline is unchanged
@@ -404,6 +419,7 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
 
         if (wasPlaying && IsPlaybackEnabled)
         {
+            _output!.Play();
             lock (_renderLock)
             {
                 _sampleProvider!.IsRendering = true;
