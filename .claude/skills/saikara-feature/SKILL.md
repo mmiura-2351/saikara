@@ -13,7 +13,9 @@ description: Implement a Saikara feature the right way — logic in Saikara.Core
    `dotnet test tests/Saikara.Core.Tests/Saikara.Core.Tests.csproj --nologo`.
 3. **Delegate** large, self-contained Core work to the `saikara-core-dev` agent to conserve
    context; integrate and sanity-check its result.
-4. **UI:** bind a thin view-model in `Saikara.App` to the Core service. Follow the `winui:*`
-   skills (winui-design, winui-dev-workflow, winui-code-review). The WinUI build is verified
+4. **UI:** bind a thin view-model in `Saikara.App` to the Core service. Use the official
+   Microsoft WinUI skills at each stage — `winui:winui-design` for new XAML/theming,
+   `winui:winui-code-review` before merge, `winui:winui-ui-testing` for UI tests — and
+   delegate larger UI builds to the `winui:winui-dev` agent. The WinUI build is verified
    only by CI — see the `saikara-ci` skill.
 5. **Track:** tick `docs/ROADMAP.md`, update the relevant GitHub issue.

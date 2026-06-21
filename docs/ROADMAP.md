@@ -8,7 +8,8 @@ Tracked in detail as GitHub issues/milestones.
 - [x] Solution, `Saikara.Core` + tests, building/testing on Linux.
 - [x] CI: Core tests on Linux, full solution build on Windows.
 - [x] Docs (requirements / architecture / roadmap) + CLAUDE.md.
-- [ ] `Saikara.App` WinUI 3 skeleton: operator window + display window, MVVM, DI host.
+- [x] `Saikara.App` WinUI 3 skeleton: operator window + display window, MVVM, DI host.
+      (Built green on Windows CI; reviewed with `winui:winui-code-review`. PR #11.)
 - [ ] SQLite wiring + dual-monitor display output.
 
 ## P1 — MIDI playback (SoundFont)

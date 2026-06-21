@@ -51,8 +51,17 @@ SDK is pinned to .NET 8 via `global.json` (the box also has a .NET 10 SDK; do no
 
 ## Conventions
 
-- MVVM with CommunityToolkit.Mvvm; prefer `x:Bind`. WinUI specifics: see the `winui:*`
-  skills (winui-design, winui-dev-workflow, winui-code-review, winui-ui-testing).
+- **Always use the official Microsoft `winui:*` skills for WinUI work** — don't hand-roll
+  WinUI knowledge. Map them to the stage:
+  - design / new XAML / theming → `winui:winui-design`
+  - build & run / build-error diagnosis → `winui:winui-dev-workflow` (Windows only)
+  - quality review before merge → `winui:winui-code-review`
+  - automated UI tests → `winui:winui-ui-testing`
+  - MSIX / signing / release → `winui:winui-packaging`
+  - WPF porting → `winui:winui-wpf-migration`
+  - Delegate larger WinUI builds to the `winui:winui-dev` agent.
+- MVVM with CommunityToolkit.Mvvm; prefer `x:Bind` with an explicit `Mode`. On `net8.0`
+  (C# 12) use the `[ObservableProperty]` **field** syntax (partial-property syntax needs C# 13).
 - New algorithmic code in `Core` is TDD-first: write the xUnit test, make it pass on Linux.
 - Add NuGet packages only when first used; pin versions; prefer stable releases.
 
@@ -72,6 +81,7 @@ The owner monitors only; this project must self-sustain across a long, context-l
 
 ## Status
 
-P0 in progress. Done: solution, `Saikara.Core` (`MusicMath`) + 15 passing tests, CI green
-(Linux + Windows), docs, and the autonomous-dev infra (agent, skills, memory).
-Next: scaffold `Saikara.App` (WinUI skeleton) and get the Windows build green. See roadmap.
+P0 nearly complete. Done: solution; `Saikara.Core` (`MusicMath`) + 15 passing tests;
+CI green (Linux + Windows); docs; autonomous-dev infra (agent, skills, memory); and the
+`Saikara.App` WinUI skeleton (two-window MVVM + DI host) building green on Windows CI (PR #11).
+Next in P0: SQLite wiring + dual-monitor display placement. Then P1 (MIDI playback). See roadmap.
