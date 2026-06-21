@@ -10,6 +10,7 @@ using Saikara.App.Services;
 using Saikara.App.ViewModels;
 using Saikara.App.Views;
 using Saikara.Core.Audio;
+using Saikara.Core.Import;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
 using Saikara.Core.Pitch;
@@ -137,6 +138,16 @@ public partial class App : Application
         services.AddSingleton(sp => new SoundFontInstaller(sp.GetRequiredService<HttpClient>()));
         services.AddSingleton<IMidiLoader, MidiLoader>();
 
+        // P7 internet import (REQUIREMENTS §6). Brings MIDI/KAR into the library from local files and
+        // URLs — the only sanctioned content path (no streaming-audio ripping). Reuses the shared
+        // HttpClient (URL download), IMidiLoader (validate/parse), and ISongLibrary (upsert). Imported
+        // files are copied under <LocalApplicationData>/Saikara/library, alongside the library DB.
+        services.AddSingleton<IMidiImportService>(sp => new MidiImportService(
+            sp.GetRequiredService<ISongLibrary>(),
+            sp.GetRequiredService<IMidiLoader>(),
+            sp.GetRequiredService<HttpClient>(),
+            GetLibraryContentDirectory()));
+
         // The audio engine needs the UI DispatcherQueue and the resolved SoundFont path, neither
         // of which exist when the host is built. A holder is constructed at startup (OnLaunched,
         // on the UI thread) and the engine resolves through it.
@@ -185,5 +196,21 @@ public partial class App : Application
             "Saikara");
         Directory.CreateDirectory(directory);
         return Path.Combine(directory, "library.db");
+    }
+
+    /// <summary>
+    /// Resolves the directory imported MIDI/KAR files are copied into, under the per-user
+    /// LocalApplicationData folder (alongside the library database), ensuring it exists. This is
+    /// the same default <see cref="MidiImportService"/> would compute, made explicit here so DI
+    /// is self-documenting.
+    /// </summary>
+    private static string GetLibraryContentDirectory()
+    {
+        var directory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Saikara",
+            "library");
+        Directory.CreateDirectory(directory);
+        return directory;
     }
 }

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml.Controls;
 using Saikara.App.Audio;
 using Saikara.App.Services;
 using Saikara.Core.Audio;
+using Saikara.Core.Import;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
 using Windows.Storage;
@@ -25,6 +28,7 @@ public partial class OperatorViewModel : ObservableObject
     private readonly ISongLibrary _library;
     private readonly IAudioEngine _audioEngine;
     private readonly IMidiLoader _midiLoader;
+    private readonly IMidiImportService _importService;
 
     /// <summary>
     /// Guards <see cref="PositionSeconds"/> against feedback: when the engine's
@@ -40,16 +44,25 @@ public partial class OperatorViewModel : ObservableObject
     /// </summary>
     public Func<Task<StorageFile?>>? PickMidiFileAsync { get; set; }
 
+    /// <summary>
+    /// Optional URL-prompt hook supplied by the window code-behind. A <see cref="ContentDialog"/>
+    /// needs the window's <c>XamlRoot</c> (which only the window can supply), so the VM delegates
+    /// the prompt and receives the entered URL (or <see langword="null"/> on cancel).
+    /// </summary>
+    public Func<Task<string?>>? PromptForImportUrlAsync { get; set; }
+
     public OperatorViewModel(
         IAppInfoService appInfo,
         ISongLibrary library,
         IAudioEngine audioEngine,
-        IMidiLoader midiLoader)
+        IMidiLoader midiLoader,
+        IMidiImportService importService)
     {
         _appInfo = appInfo;
         _library = library;
         _audioEngine = audioEngine;
         _midiLoader = midiLoader;
+        _importService = importService;
 
         // Seed transport state from the engine, then follow it.
         _isPlaybackEnabled = (_audioEngine as MeltySynthAudioEngine)?.IsPlaybackEnabled ?? true;
@@ -67,6 +80,33 @@ public partial class OperatorViewModel : ObservableObject
     /// <summary>The song currently highlighted in the search-results list (may be null).</summary>
     [ObservableProperty]
     private Song? _selectedSong;
+
+    /// <summary>
+    /// The library <see cref="Song"/> currently loaded into the engine, or <see langword="null"/>
+    /// for an ad-hoc "Open MIDI file…" load. Later phases (P5 score &amp; history persistence)
+    /// attach the score to this song; a null value means the loaded MIDI is not a library entry.
+    /// </summary>
+    [ObservableProperty]
+    private Song? _currentSong;
+
+    /// <summary>Message shown in the import-status <c>InfoBar</c> after an import attempt.</summary>
+    [ObservableProperty]
+    private string _importMessage = string.Empty;
+
+    /// <summary>Whether the import-status <c>InfoBar</c> is currently shown.</summary>
+    [ObservableProperty]
+    private bool _isImportInfoOpen;
+
+    /// <summary>Severity of the import-status <c>InfoBar</c> (success vs. error).</summary>
+    [ObservableProperty]
+    private InfoBarSeverity _importSeverity = InfoBarSeverity.Informational;
+
+    /// <summary>
+    /// <see langword="true"/> while an import (file or URL) is in flight; gates the import buttons
+    /// so concurrent imports cannot stack up.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isImporting;
 
     /// <summary>Semitone transpose applied to playback. 0 = original key.</summary>
     [ObservableProperty]
@@ -180,7 +220,8 @@ public partial class OperatorViewModel : ObservableObject
     private void KeyDown() => KeyOffset--;
 
     /// <summary>
-    /// Opens a MIDI/KAR file through the window-supplied picker and loads it into the engine.
+    /// Opens an ad-hoc MIDI/KAR file through the window-supplied picker and loads it into the
+    /// engine. The loaded file is not a library entry, so <see cref="CurrentSong"/> is cleared.
     /// No-op if no picker hook is wired or the user cancels.
     /// </summary>
     [RelayCommand]
@@ -197,8 +238,136 @@ public partial class OperatorViewModel : ObservableObject
             return;
         }
 
-        // Parse off the UI thread; the loader is pure managed code with no UI affinity.
-        MidiSong song = await Task.Run(() => _midiLoader.Load(file.Path)).ConfigureAwait(true);
+        await LoadFileIntoEngineAsync(file.Path, file.Name, libraryEntry: null).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Loads the currently selected library song into the engine and starts playback. The chosen
+    /// library <see cref="Song"/> is tracked in <see cref="CurrentSong"/> so later phases can attach
+    /// score history. No-op when nothing is selected; file-load failures are surfaced gracefully.
+    /// </summary>
+    [RelayCommand]
+    private async Task PlaySelectedAsync()
+    {
+        Song? song = SelectedSong;
+        if (song is null)
+        {
+            return;
+        }
+
+        string fileName = Path.GetFileName(song.FilePath);
+        bool loaded = await LoadFileIntoEngineAsync(song.FilePath, fileName, libraryEntry: song)
+            .ConfigureAwait(true);
+
+        if (loaded && IsPlaybackEnabled)
+        {
+            _audioEngine.Play();
+        }
+    }
+
+    /// <summary>
+    /// Imports a local MIDI/KAR file into the library via the window-supplied picker, then refreshes
+    /// the search results so the new song appears. Surfaces success / failure in the import InfoBar.
+    /// No-op if no picker hook is wired or the user cancels.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportFromFileAsync()
+    {
+        if (PickMidiFileAsync is null)
+        {
+            return;
+        }
+
+        StorageFile? file = await PickMidiFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        await RunImportAsync(
+            () => _importService.ImportFileAsync(file.Path, DateTimeOffset.Now)).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Prompts for a URL via the window-supplied dialog, downloads and imports the MIDI/KAR there,
+    /// then refreshes the search results. Surfaces success / failure in the import InfoBar. No-op if
+    /// no prompt hook is wired, the user cancels, or the URL is blank.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportFromUrlAsync()
+    {
+        if (PromptForImportUrlAsync is null)
+        {
+            return;
+        }
+
+        string? url = await PromptForImportUrlAsync();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        await RunImportAsync(
+            () => _importService.ImportUrlAsync(url!, addedAt: DateTimeOffset.Now)).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Runs an import operation, refreshing the search results on success and translating an
+    /// <see cref="ImportException"/> (or any unexpected error) into a friendly InfoBar message.
+    /// Guards against concurrent imports via <see cref="IsImporting"/>.
+    /// </summary>
+    private async Task RunImportAsync(Func<Task<ImportResult>> import)
+    {
+        if (IsImporting)
+        {
+            return;
+        }
+
+        IsImporting = true;
+        try
+        {
+            ImportResult result = await import().ConfigureAwait(true);
+
+            // Re-run the current search so the imported song appears (empty query => whole library).
+            await SearchAsync().ConfigureAwait(true);
+
+            ShowImportInfo(
+                $"Imported “{result.Song.Title}”.",
+                InfoBarSeverity.Success);
+        }
+        catch (ImportException ex)
+        {
+            ShowImportInfo(ex.Message, InfoBarSeverity.Error);
+        }
+        catch (Exception)
+        {
+            ShowImportInfo("The import failed unexpectedly.", InfoBarSeverity.Error);
+        }
+        finally
+        {
+            IsImporting = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads a MIDI/KAR file from <paramref name="filePath"/> into the engine, reapplying the
+    /// current key/tempo, and tracks <paramref name="libraryEntry"/> as <see cref="CurrentSong"/>.
+    /// Returns <see langword="true"/> on success; a parse/IO failure is surfaced in the import
+    /// InfoBar and returns <see langword="false"/> without changing the loaded state.
+    /// </summary>
+    private async Task<bool> LoadFileIntoEngineAsync(string filePath, string fileName, Song? libraryEntry)
+    {
+        MidiSong song;
+        try
+        {
+            // Parse off the UI thread; the loader is pure managed code with no UI affinity.
+            song = await Task.Run(() => _midiLoader.Load(filePath)).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            ShowImportInfo($"Could not load “{fileName}”.", InfoBarSeverity.Error);
+            return false;
+        }
 
         _audioEngine.Load(song);
 
@@ -206,10 +375,20 @@ public partial class OperatorViewModel : ObservableObject
         _audioEngine.SemitoneOffset = KeyOffset;
         _audioEngine.TempoPercent = TempoPercent;
 
-        LoadedFileName = file.Name;
+        CurrentSong = libraryEntry;
+        LoadedFileName = fileName;
         IsSongLoaded = true;
         SyncDurationFromEngine();
         SyncPositionFromEngine();
+        return true;
+    }
+
+    /// <summary>Opens the import-status InfoBar with the given message and severity.</summary>
+    private void ShowImportInfo(string message, InfoBarSeverity severity)
+    {
+        ImportMessage = message;
+        ImportSeverity = severity;
+        IsImportInfoOpen = true;
     }
 
     /// <summary>Starts or resumes playback.</summary>

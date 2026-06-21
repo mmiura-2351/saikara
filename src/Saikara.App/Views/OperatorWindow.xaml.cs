@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Saikara.App.ViewModels;
@@ -35,6 +36,10 @@ public sealed partial class OperatorWindow : Window
         // Supply the file-picker hook: the picker must be initialised with THIS window's HWND in
         // an unpackaged WinUI app, so we own it here and hand the chosen file back to the VM.
         ViewModel.PickMidiFileAsync = PickMidiFileAsync;
+
+        // Supply the URL-prompt hook: a ContentDialog needs this window's XamlRoot, which only the
+        // window can provide, so we own the dialog here and hand the entered URL back to the VM.
+        ViewModel.PromptForImportUrlAsync = PromptForImportUrlAsync;
 
         Title = "Saikara — Operator";
         ResizeToContent();
@@ -81,6 +86,42 @@ public sealed partial class OperatorWindow : Window
         WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
         return await picker.PickSingleFileAsync();
+    }
+
+    /// <summary>
+    /// Shows a modal dialog asking for a MIDI/KAR URL and returns the trimmed entry, or
+    /// <see langword="null"/> when the user cancels or leaves it blank. The dialog is anchored to
+    /// this window via <c>Content.XamlRoot</c> (required for a <see cref="ContentDialog"/> in an
+    /// unpackaged WinUI app).
+    /// </summary>
+    private async Task<string?> PromptForImportUrlAsync()
+    {
+        var urlBox = new TextBox
+        {
+            PlaceholderText = "https://example.com/song.mid",
+        };
+        AutomationProperties.SetAutomationId(urlBox, "OperatorImportUrlTextBox");
+        AutomationProperties.SetName(urlBox, "MIDI or KAR URL");
+
+        var dialog = new ContentDialog
+        {
+            Title = "Import from URL",
+            Content = urlBox,
+            PrimaryButtonText = "Import",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+        AutomationProperties.SetAutomationId(dialog, "OperatorImportUrlDialog");
+
+        ContentDialogResult result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return null;
+        }
+
+        string url = urlBox.Text.Trim();
+        return url.Length == 0 ? null : url;
     }
 
     /// <summary>
