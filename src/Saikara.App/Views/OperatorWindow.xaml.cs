@@ -46,11 +46,15 @@ public sealed partial class OperatorWindow : Window
     }
 
     /// <summary>
-    /// Formats the semitone key offset for display (e.g. <c>+2</c>, <c>0</c>, <c>-1</c>).
+    /// Formats the semitone key offset for display with a bilingual label
+    /// (e.g. <c>"キー Key: +2"</c>, <c>"キー Key: 0"</c>).
     /// Static so it can be used directly from an <c>x:Bind</c> function binding.
     /// </summary>
-    public static string FormatKey(int keyOffset) =>
-        keyOffset > 0 ? $"+{keyOffset}" : keyOffset.ToString();
+    public static string FormatKeyLabel(int keyOffset)
+    {
+        string value = keyOffset > 0 ? $"+{keyOffset}" : keyOffset.ToString();
+        return $"キー Key: {value}";
+    }
 
     /// <summary>Boolean negation for <c>x:Bind</c> (shows the "playback unavailable" banner when NOT enabled).</summary>
     public static bool Not(bool value) => !value;
@@ -58,6 +62,10 @@ public sealed partial class OperatorWindow : Window
     /// <summary>Bool-to-Visibility for <c>x:Bind</c> (P6 correction editor visibility).</summary>
     public static Visibility BoolToVisibility(bool value) =>
         value ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Inverted Bool-to-Visibility for <c>x:Bind</c> (queue empty-state placeholder).</summary>
+    public static Visibility InvertBoolToVisibility(bool value) =>
+        value ? Visibility.Collapsed : Visibility.Visible;
 
     /// <summary>Whether the Play command is currently allowed (a song is loaded and not already playing).</summary>
     public static bool CanPlay(bool isSongLoaded, bool isPlaybackEnabled, PlaybackState state) =>
@@ -164,6 +172,40 @@ public sealed partial class OperatorWindow : Window
         }
     }
 
+    /// <summary>Removes a song from the queue when the delete icon button is clicked.</summary>
+    private void OnRemoveFromQueueClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Song song })
+        {
+            ViewModel.RemoveFromQueueCommand.Execute(song);
+        }
+    }
+
+    /// <summary>
+    /// Sets the 1-based queue position number on each queue item as its container is prepared.
+    /// This avoids the need for a separate index-tracking property in the data model.
+    /// </summary>
+    private void OnQueueContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (args.InRecycleQueue)
+        {
+            return;
+        }
+
+        // Find the QueuePositionText TextBlock inside the item template and set its text.
+        if (args.ItemContainer?.ContentTemplateRoot is Grid grid)
+        {
+            foreach (var child in grid.Children)
+            {
+                if (child is TextBlock tb && tb.Name == "QueuePositionText")
+                {
+                    tb.Text = (args.ItemIndex + 1).ToString();
+                    break;
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Sizes the operator window from its layout. <see cref="AppWindow.Resize"/> takes
     /// physical pixels, so the DIP target is scaled by the monitor DPI.
@@ -172,8 +214,7 @@ public sealed partial class OperatorWindow : Window
     {
         var hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         var scale = GetDpiForWindow(hwnd) / 96.0;
-        // Taller than the P0 layout: the left column now also carries the playback transport,
-        // correction editor (P6), and settings section (P8). ScrollViewer handles overflow.
-        AppWindow.Resize(new SizeInt32((int)(1180 * scale), (int)(980 * scale)));
+        // Wider left column (380 from 340) plus padding; taller for card-style layout.
+        AppWindow.Resize(new SizeInt32((int)(1220 * scale), (int)(980 * scale)));
     }
 }

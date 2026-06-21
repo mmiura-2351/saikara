@@ -109,6 +109,9 @@ public partial class OperatorViewModel : ObservableObject
 
         // Seed the latency offset from the pitch monitor (P8 settings).
         _latencyOffsetMs = _pitchMonitor.LatencyOffset.TotalMilliseconds;
+
+        // Keep the HasQueueItems flag in sync with queue mutations.
+        ReservationQueue.CollectionChanged += (_, _) => HasQueueItems = ReservationQueue.Count > 0;
     }
 
     /// <summary>Application name, surfaced in the operator header.</summary>
@@ -280,6 +283,13 @@ public partial class OperatorViewModel : ObservableObject
     public ObservableCollection<Song> ReservationQueue { get; } = new();
 
     /// <summary>
+    /// <see langword="true"/> when the reservation queue has at least one item. Drives the
+    /// empty-state placeholder visibility in the operator UI.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasQueueItems;
+
+    /// <summary>
     /// Queries the library for <see cref="SearchText"/> and refreshes
     /// <see cref="SearchResults"/> in place. An empty query returns the whole library
     /// (per <see cref="ISongLibrary.SearchAsync"/>). Awaitable; never blocks the UI thread.
@@ -321,6 +331,10 @@ public partial class OperatorViewModel : ObservableObject
     /// <summary>Adds the currently selected song to the reservation queue.</summary>
     [RelayCommand]
     private void AddToQueue() => AddSongToQueue(SelectedSong);
+
+    /// <summary>Removes the given song from the reservation queue.</summary>
+    [RelayCommand]
+    private void RemoveFromQueue(Song song) => ReservationQueue.Remove(song);
 
     /// <summary>Raises the playback key by one semitone.</summary>
     [RelayCommand]
