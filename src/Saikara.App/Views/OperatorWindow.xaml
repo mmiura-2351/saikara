@@ -86,12 +86,62 @@
                     </ListView.ItemTemplate>
                 </ListView>
 
-                <Button
-                    AutomationProperties.AutomationId="OperatorAddToQueueButton"
-                    HorizontalAlignment="Stretch"
-                    Command="{x:Bind ViewModel.AddToQueueCommand}"
-                    Content="Add to queue"
-                    Style="{StaticResource AccentButtonStyle}" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        Grid.Column="0"
+                        AutomationProperties.AutomationId="OperatorPlaySelectedButton"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.PlaySelectedCommand}"
+                        Content="Play selected"
+                        Style="{StaticResource AccentButtonStyle}" />
+                    <Button
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="OperatorAddToQueueButton"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.AddToQueueCommand}"
+                        Content="Add to queue" />
+                </Grid>
+
+                <!-- Library import (P7): MIDI/KAR from a local file or a URL. -->
+                <TextBlock
+                    Margin="0,8,0,0"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Add to library" />
+
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        Grid.Column="0"
+                        AutomationProperties.AutomationId="OperatorAddToLibraryButton"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.ImportFromFileCommand}"
+                        Content="Add to library…" />
+                    <Button
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="OperatorImportFromUrlButton"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.ImportFromUrlCommand}"
+                        Content="Import from URL…" />
+                </Grid>
+
+                <TextBlock
+                    AutomationProperties.AutomationId="OperatorImportHelpText"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="MIDI/KAR files only (.mid, .midi, .kar)." />
+
+                <InfoBar
+                    AutomationProperties.AutomationId="OperatorImportInfoBar"
+                    IsOpen="{x:Bind ViewModel.IsImportInfoOpen, Mode=TwoWay}"
+                    Message="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
+                    Severity="{x:Bind ViewModel.ImportSeverity, Mode=OneWay}" />
 
                 <TextBlock
                     Margin="0,8,0,0"
