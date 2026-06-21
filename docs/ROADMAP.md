@@ -20,15 +20,18 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 ## P1 — MIDI playback (SoundFont)
 - [x] MIDI model + load (DryWetMIDI) in Core; KAR/XF aware. Plus key/tempo transforms
       (`MidiTransforms`) and best-effort melody detection. 31 tests. PR #14.
-- [ ] SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction.
-      (SoundFont asset: user-specified `.sf2` + optional first-run download of a free
-      default; large binaries are git-ignored, not committed.)
+- [x] SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction.
+      (SoundFont asset: first-run auto-download of a free default; git-ignored, not committed.)
       - [x] Core abstraction + assets: `IAudioEngine` (transport + key/tempo) interface,
             `SoundFontInstaller` (atomic first-run download), `MidiSerializer` (re-emit a
             transformed `MidiSong` as SMF for the synth). 23 tests. (Linux-testable part.)
-      - [ ] App: `MeltySynthAudioEngine : IAudioEngine` (MeltySynth + NAudio/WASAPI),
-            driven from the serialized transformed song. (Windows.)
-- [ ] Transport (play/pause/seek) wiring; expose `MidiTransforms` key/tempo in the operator UI.
+      - [x] App: `MeltySynthAudioEngine : IAudioEngine` (MeltySynth 2.4.1 + NAudio 2.2.1/WASAPI),
+            driven from the serialized transformed song. PR #16 (build-green on Windows CI).
+- [x] Transport wiring + key/tempo in the operator UI: Open MIDI file, play/pause/stop,
+      seek slider, key/tempo bound to the engine. PR #16.
+
+> **P1 build-complete; runtime audio verification pending** on a real Windows machine
+> (CI has no audio device — it only compiles). First "does it make sound" test is owner-run.
 
 ## P2 — Lyric telop
 - [ ] Parse KAR/XF lyric + timing events in Core.
