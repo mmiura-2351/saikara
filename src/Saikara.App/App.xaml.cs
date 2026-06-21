@@ -1,16 +1,19 @@
+using System;
+using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.UI.Xaml;
 using Saikara.App.Services;
 using Saikara.App.ViewModels;
 using Saikara.App.Views;
+using Saikara.Core.Library;
 
 namespace Saikara.App;
 
 /// <summary>
 /// Application entry point. Builds the dependency-injection host (view-models and
-/// placeholder services) and, on launch, opens the two-window layout described in
-/// REQUIREMENTS §5: an operator window and a display window (secondary monitor).
+/// services) and, on launch, opens the two-window layout described in REQUIREMENTS §5:
+/// an operator window (primary monitor) and a display window (secondary monitor).
 /// </summary>
 public partial class App : Application
 {
@@ -33,15 +36,23 @@ public partial class App : Application
     /// </summary>
     public static T GetService<T>() where T : notnull => Host.Services.GetRequiredService<T>();
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Create the SQLite schema before any window queries the library. The library
+        // is a singleton, so this initialises the one shared instance. InitializeAsync
+        // is idempotent (CREATE TABLE IF NOT EXISTS), so a repeat call is harmless.
+        var library = GetService<ISongLibrary>();
+        await library.InitializeAsync();
+
         // Operator window: song-select remote, reservation queue, key/tempo controls.
+        // Stays on the primary monitor.
         _operatorWindow = GetService<OperatorWindow>();
         _operatorWindow.Activate();
 
-        // Display window: lyric telop, background, real-time pitch bar.
-        // Intended for a secondary monitor; multi-monitor placement lands later in P0.
+        // Display window: lyric telop, background, real-time pitch bar. Placed on a
+        // secondary monitor when one is present; otherwise shown on the primary.
         _displayWindow = GetService<DisplayWindow>();
+        _displayWindow.PlaceOnSecondaryMonitor(_operatorWindow);
         _displayWindow.Activate();
     }
 
@@ -56,9 +67,12 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
-        // Placeholder application services. Concrete implementations (audio I/O,
-        // synthesis, library/SQLite) land in later phases; see ROADMAP.
         services.AddSingleton<IAppInfoService, AppInfoService>();
+
+        // Song library (REQUIREMENTS §5). Singleton: one SQLite connection is opened
+        // lazily and shared. Stored under LocalApplicationData so it survives reinstalls
+        // of the unpackaged app and is per-user.
+        services.AddSingleton<ISongLibrary>(_ => new SqliteSongLibrary(GetLibraryDatabasePath()));
 
         // View-models. Transient so each window instance gets its own state.
         services.AddTransient<OperatorViewModel>();
@@ -67,5 +81,18 @@ public partial class App : Application
         // Windows. Transient: a window is consumed once at launch.
         services.AddTransient<OperatorWindow>();
         services.AddTransient<DisplayWindow>();
+    }
+
+    /// <summary>
+    /// Resolves the on-disk path of the SQLite library database under the per-user
+    /// LocalApplicationData folder, ensuring the containing directory exists.
+    /// </summary>
+    private static string GetLibraryDatabasePath()
+    {
+        var directory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Saikara");
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, "library.db");
     }
 }

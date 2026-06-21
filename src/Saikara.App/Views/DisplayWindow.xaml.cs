@@ -10,8 +10,8 @@ namespace Saikara.App.Views;
 
 /// <summary>
 /// Display window: lyric telop, background, and real-time pitch bar (REQUIREMENTS §5).
-/// Intended for a secondary monitor; explicit multi-monitor placement is wired up
-/// later in P0. Hosts <see cref="DisplayViewModel"/>.
+/// Targets a secondary monitor via <see cref="PlaceOnSecondaryMonitor"/>; falls back to
+/// the primary monitor on a single-monitor setup. Hosts <see cref="DisplayViewModel"/>.
 /// </summary>
 public sealed partial class DisplayWindow : Window
 {
@@ -28,6 +28,49 @@ public sealed partial class DisplayWindow : Window
 
         Title = "Saikara — Display";
         ResizeToContent();
+    }
+
+    /// <summary>
+    /// Places this window on a monitor other than the one hosting <paramref name="operatorWindow"/>
+    /// when a second monitor exists (REQUIREMENTS §5 — dual output). The window is moved to
+    /// fill the secondary monitor's work area and switched to a full-screen presenter. On a
+    /// single-monitor setup the window is left on the primary monitor at its current size.
+    /// </summary>
+    /// <param name="operatorWindow">The operator window, used to identify the primary monitor.</param>
+    public void PlaceOnSecondaryMonitor(Window operatorWindow)
+    {
+        var displayAreas = DisplayArea.FindAll();
+        if (displayAreas.Count < 2)
+        {
+            // Single monitor: leave the display window on the primary monitor as-is.
+            return;
+        }
+
+        // The monitor the operator window currently sits on; we want a different one.
+        var operatorArea = DisplayArea.GetFromWindowId(
+            operatorWindow.AppWindow.Id,
+            DisplayAreaFallback.Primary);
+
+        DisplayArea? target = null;
+        foreach (var area in displayAreas)
+        {
+            if (area.DisplayId.Value != operatorArea.DisplayId.Value)
+            {
+                target = area;
+                break;
+            }
+        }
+
+        if (target is null)
+        {
+            // Defensive: all areas resolved to the operator's monitor — stay put.
+            return;
+        }
+
+        // Move into the secondary monitor's work area (excludes the taskbar), then go
+        // full-screen so the telop fills the output.
+        AppWindow.MoveAndResize(target.WorkArea);
+        AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
     }
 
     /// <summary>

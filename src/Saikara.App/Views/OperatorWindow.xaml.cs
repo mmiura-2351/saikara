@@ -3,7 +3,10 @@ using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Saikara.App.ViewModels;
+using Saikara.Core.Library;
 using Windows.Graphics;
 
 namespace Saikara.App.Views;
@@ -35,6 +38,42 @@ public sealed partial class OperatorWindow : Window
     /// </summary>
     public static string FormatKey(int keyOffset) =>
         keyOffset > 0 ? $"+{keyOffset}" : keyOffset.ToString();
+
+    /// <summary>
+    /// Runs a library search as the user types. Only reacts to <see cref="AutoSuggestionBoxTextChangedReason.UserInput"/>
+    /// so programmatic <c>Text</c> updates (e.g. clearing on add-to-queue) do not re-query.
+    /// </summary>
+    private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (args.Reason == AutoSuggestionBoxTextChangedReason.UserInput)
+        {
+            await ViewModel.SearchAsync();
+        }
+    }
+
+    /// <summary>
+    /// Runs a search when the query is submitted (Enter / search-glyph). If a result was
+    /// chosen from the list it is queued directly; otherwise the results are refreshed.
+    /// </summary>
+    private async void OnSearchQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        if (args.ChosenSuggestion is Song chosen)
+        {
+            ViewModel.AddSongToQueue(chosen);
+            return;
+        }
+
+        await ViewModel.SearchAsync();
+    }
+
+    /// <summary>Adds the double-tapped search result to the reservation queue.</summary>
+    private void OnSearchResultDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is FrameworkElement { DataContext: Song song })
+        {
+            ViewModel.AddSongToQueue(song);
+        }
+    }
 
     /// <summary>
     /// Sizes the operator window from its layout. <see cref="AppWindow.Resize"/> takes
