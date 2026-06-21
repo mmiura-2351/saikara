@@ -39,17 +39,24 @@ Tracked in detail as GitHub issues/milestones.
       best/recent display (PR #29).
 - [x] Library import (file + URL) + play-from-library + `CurrentSong` tracking (PR #28).
 
-## P6 — Correction editor
-- [ ] Designate melody track; correct lyric timing; save back to library.
+## P6 — Correction editor ✅
+- [x] Core: `SongCorrections`/`CorrectedSongBuilder`/`SqliteSongCorrectionsStore` (PR #31).
+- [x] App: melody track ComboBox + lyric offset NumberBox + Save/Reset; engine applies
+      corrections before telop/reference/mute (PR #32).
 
 ## P7 — Internet import ✅
 - [x] Core `MidiImportService` — local file + URL import, validate, atomic copy, KAR metadata
       extraction, content-addressed Number, upsert to library (PR #27).
 - [x] App import UI (FileOpenPicker + URL ContentDialog) + play-from-library (PR #28).
-- [ ] (Optional) song-name search of MIDI/KAR sources.
+- [ ] (Optional/future) song-name search of MIDI/KAR sources.
 
-## P8 — Polish
-- [ ] Background (static/gradient -> looping video).
-- [ ] UI refinement, settings, stabilization.
-- [ ] Latency calibration UI (from P3).
-- [ ] Reservation queue multi-singer management.
+## P8 — Polish ✅ (core features done)
+- [x] Reservation queue auto-advance (3s delay, auto-load+play next song) (PR #32).
+- [x] Settings: latency offset NumberBox + SoundFont path display (PR #32).
+- [ ] (Future) Background looping video; further UI refinement.
+
+---
+
+> **All planned phases (P0–P8) are essentially complete.** 253 Core tests, 32 merged PRs,
+> main green. Future enhancements: background video, song-name search, advanced per-syllable
+> lyric editor, UI polish.

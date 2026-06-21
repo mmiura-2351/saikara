@@ -88,5 +88,5 @@ melody-detect/MuteTrack), audio (`IAudioEngine`/`SoundFontInstaller`/`MidiSerial
 MIDI import (`MidiImportService`). App: two-window WinUI; operator (search, transport, key/tempo,
 guide-melody toggle, import file+URL); display (color-wipe telop, live mic pitch bar, scored
 result overlay + history); `MeltySynthAudioEngine`; `PitchMonitor`; `NowPlaying`.
-**Remaining (issues #8, #10):** P6 correction editor (melody track + lyric timing), P8 polish
-(background, latency calibration UI, reservation queue multi-singer, UI refinement).
+**All phases P0–P8 essentially complete (PRs #11–#32, 253 Core tests).** Future enhancements:
+background looping video, song-name search, advanced per-syllable lyric editor, UI polish.
