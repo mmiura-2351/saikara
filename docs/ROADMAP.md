@@ -18,9 +18,12 @@ Tracked in detail as GitHub issues/milestones.
 two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment are all in place.
 
 ## P1 — MIDI playback (SoundFont)
-- [ ] MIDI model + load (DryWetMIDI) in Core; KAR/XF aware.
+- [x] MIDI model + load (DryWetMIDI) in Core; KAR/XF aware. Plus key/tempo transforms
+      (`MidiTransforms`) and best-effort melody detection. 31 tests. PR #14.
 - [ ] SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction.
-- [ ] Transport (play/pause/seek); **key change** (transpose) and **tempo change**.
+      (SoundFont asset: user-specified `.sf2` + optional first-run download of a free
+      default; large binaries are git-ignored, not committed.)
+- [ ] Transport (play/pause/seek) wiring; expose `MidiTransforms` key/tempo in the operator UI.
 
 ## P2 — Lyric telop
 - [ ] Parse KAR/XF lyric + timing events in Core.
