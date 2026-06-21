@@ -66,14 +66,47 @@
                 TextWrapping="Wrap" />
         </StackPanel>
 
-        <!-- Real-time pitch bar placeholder (driven by the Core pitch detector in P3) -->
-        <ProgressBar
+        <!-- Real-time pitch bar (P3): the sung pitch vs the active reference note on a shared
+             vertical MIDI axis. A faint framed band is the axis; a gold horizontal segment marks
+             the current reference note's pitch; a cyan marker tracks the sung pitch. Both are
+             positioned imperatively from code-behind (Canvas.SetTop on normalised VM values) since
+             pixel layout depends on the live canvas height. Fixed bright colors on the dark surface
+             — deliberately NOT themed (this is a performance output, like the telop). -->
+        <Border
             Grid.Row="1"
+            Height="160"
             Margin="48,0"
             AutomationProperties.AutomationId="DisplayPitchBar"
-            Maximum="1.0"
-            Minimum="0.0"
-            Value="{x:Bind ViewModel.PitchPosition, Mode=OneWay}" />
+            AutomationProperties.Name="Pitch bar"
+            Background="#33000000"
+            BorderBrush="#33FFFFFF"
+            BorderThickness="1"
+            CornerRadius="4">
+            <Canvas
+                x:Name="PitchCanvas"
+                AutomationProperties.AutomationId="DisplayPitchCanvas"
+                SizeChanged="OnPitchCanvasSizeChanged">
+
+                <!-- Reference (target) note segment. Width is set in code-behind to a central band. -->
+                <Rectangle
+                    x:Name="ReferenceLine"
+                    Height="6"
+                    AutomationProperties.AutomationId="DisplayReferenceLine"
+                    Fill="#FFFFD54A"
+                    RadiusX="3"
+                    RadiusY="3"
+                    Visibility="Collapsed" />
+
+                <!-- Sung-pitch marker. Moves vertically to the detected note; hidden when unvoiced. -->
+                <Ellipse
+                    x:Name="SungMarker"
+                    Width="22"
+                    Height="22"
+                    AutomationProperties.AutomationId="DisplaySungMarker"
+                    Fill="#FF35E0FF"
+                    Visibility="Collapsed" />
+            </Canvas>
+        </Border>
 
         <!-- Status strip -->
         <TextBlock
