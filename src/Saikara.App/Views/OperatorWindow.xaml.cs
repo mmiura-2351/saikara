@@ -40,12 +40,12 @@ public sealed partial class OperatorWindow : Window
         keyOffset > 0 ? $"+{keyOffset}" : keyOffset.ToString();
 
     /// <summary>
-    /// Runs a library search as the user types. Only reacts to <see cref="AutoSuggestionBoxTextChangedReason.UserInput"/>
+    /// Runs a library search as the user types. Only reacts to <see cref="AutoSuggestionBoxTextChangeReason.UserInput"/>
     /// so programmatic <c>Text</c> updates (e.g. clearing on add-to-queue) do not re-query.
     /// </summary>
     private async void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
     {
-        if (args.Reason == AutoSuggestionBoxTextChangedReason.UserInput)
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
         {
             await ViewModel.SearchAsync();
         }
