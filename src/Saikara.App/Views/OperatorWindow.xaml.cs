@@ -1,19 +1,23 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Saikara.App.ViewModels;
+using Saikara.Core.Audio;
 using Saikara.Core.Library;
 using Windows.Graphics;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 
 namespace Saikara.App.Views;
 
 /// <summary>
-/// Operator window: song-select remote, reservation queue, and key/tempo controls
-/// (REQUIREMENTS §5). Hosts <see cref="OperatorViewModel"/>.
+/// Operator window: song-select remote, reservation queue, key/tempo controls, and the
+/// P1 playback transport (REQUIREMENTS §4–§5). Hosts <see cref="OperatorViewModel"/>.
 /// </summary>
 public sealed partial class OperatorWindow : Window
 {
@@ -28,6 +32,10 @@ public sealed partial class OperatorWindow : Window
         ViewModel = viewModel;
         InitializeComponent();
 
+        // Supply the file-picker hook: the picker must be initialised with THIS window's HWND in
+        // an unpackaged WinUI app, so we own it here and hand the chosen file back to the VM.
+        ViewModel.PickMidiFileAsync = PickMidiFileAsync;
+
         Title = "Saikara — Operator";
         ResizeToContent();
     }
@@ -38,6 +46,42 @@ public sealed partial class OperatorWindow : Window
     /// </summary>
     public static string FormatKey(int keyOffset) =>
         keyOffset > 0 ? $"+{keyOffset}" : keyOffset.ToString();
+
+    /// <summary>Boolean negation for <c>x:Bind</c> (shows the "playback unavailable" banner when NOT enabled).</summary>
+    public static bool Not(bool value) => !value;
+
+    /// <summary>Whether the Play command is currently allowed (a song is loaded and not already playing).</summary>
+    public static bool CanPlay(bool isSongLoaded, bool isPlaybackEnabled, PlaybackState state) =>
+        isSongLoaded && isPlaybackEnabled && state != PlaybackState.Playing;
+
+    /// <summary>Whether the Pause command is currently allowed (engine is playing).</summary>
+    public static bool CanPause(PlaybackState state) => state == PlaybackState.Playing;
+
+    /// <summary>Whether the Stop command is currently allowed (engine is not already stopped).</summary>
+    public static bool CanStop(bool isSongLoaded, PlaybackState state) =>
+        isSongLoaded && state != PlaybackState.Stopped;
+
+    /// <summary>
+    /// Shows the MIDI/KAR file picker, initialised with this window's HWND (the classic
+    /// unpackaged-WinUI requirement), and returns the chosen file or <see langword="null"/>.
+    /// </summary>
+    private async Task<StorageFile?> PickMidiFileAsync()
+    {
+        var picker = new FileOpenPicker
+        {
+            ViewMode = PickerViewMode.List,
+            SuggestedStartLocation = PickerLocationId.MusicLibrary,
+        };
+        picker.FileTypeFilter.Add(".mid");
+        picker.FileTypeFilter.Add(".midi");
+        picker.FileTypeFilter.Add(".kar");
+
+        // Unpackaged apps have no implicit window context for the picker; bind it to our HWND.
+        IntPtr hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        return await picker.PickSingleFileAsync();
+    }
 
     /// <summary>
     /// Runs a library search as the user types. Only reacts to <see cref="AutoSuggestionBoxTextChangeReason.UserInput"/>
@@ -83,6 +127,8 @@ public sealed partial class OperatorWindow : Window
     {
         var hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         var scale = GetDpiForWindow(hwnd) / 96.0;
-        AppWindow.Resize(new SizeInt32((int)(1180 * scale), (int)(760 * scale)));
+        // Taller than the P0 layout: the left column now also carries the playback transport
+        // (open-file, file label, optional banner, play/pause/stop, seek slider, time labels).
+        AppWindow.Resize(new SizeInt32((int)(1180 * scale), (int)(940 * scale)));
     }
 }

@@ -126,6 +126,96 @@
                     Minimum="50"
                     SpinButtonPlacementMode="Inline"
                     Value="{x:Bind ViewModel.TempoPercent, Mode=TwoWay}" />
+
+                <!-- Playback transport (P1) -->
+                <TextBlock
+                    Margin="0,8,0,0"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Playback" />
+
+                <Button
+                    AutomationProperties.AutomationId="OperatorOpenFileButton"
+                    HorizontalAlignment="Stretch"
+                    Command="{x:Bind ViewModel.OpenFileCommand}"
+                    Content="Open MIDI file…" />
+
+                <TextBlock
+                    AutomationProperties.AutomationId="OperatorLoadedFileText"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
+
+                <InfoBar
+                    AutomationProperties.AutomationId="OperatorPlaybackUnavailableInfoBar"
+                    IsClosable="False"
+                    IsOpen="{x:Bind local:OperatorWindow.Not(ViewModel.IsPlaybackEnabled), Mode=OneWay}"
+                    Message="Playback is unavailable — the SoundFont could not be loaded."
+                    Severity="Warning" />
+
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        Grid.Column="0"
+                        AutomationProperties.AutomationId="OperatorPlayButton"
+                        AutomationProperties.Name="Play"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.PlayCommand}"
+                        IsEnabled="{x:Bind local:OperatorWindow.CanPlay(ViewModel.IsSongLoaded, ViewModel.IsPlaybackEnabled, ViewModel.PlaybackState), Mode=OneWay}"
+                        Style="{StaticResource AccentButtonStyle}">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE768;" />
+                    </Button>
+                    <Button
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="OperatorPauseButton"
+                        AutomationProperties.Name="Pause"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.PauseCommand}"
+                        IsEnabled="{x:Bind local:OperatorWindow.CanPause(ViewModel.PlaybackState), Mode=OneWay}">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE769;" />
+                    </Button>
+                    <Button
+                        Grid.Column="2"
+                        AutomationProperties.AutomationId="OperatorStopButton"
+                        AutomationProperties.Name="Stop"
+                        HorizontalAlignment="Stretch"
+                        Command="{x:Bind ViewModel.StopCommand}"
+                        IsEnabled="{x:Bind local:OperatorWindow.CanStop(ViewModel.IsSongLoaded, ViewModel.PlaybackState), Mode=OneWay}">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE71A;" />
+                    </Button>
+                </Grid>
+
+                <Slider
+                    AutomationProperties.AutomationId="OperatorSeekSlider"
+                    AutomationProperties.Name="Seek"
+                    IsEnabled="{x:Bind ViewModel.IsSongLoaded, Mode=OneWay}"
+                    Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
+                    Minimum="0"
+                    StepFrequency="1"
+                    Value="{x:Bind ViewModel.PositionSeconds, Mode=TwoWay}" />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Grid.Column="0"
+                        AutomationProperties.AutomationId="OperatorElapsedText"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.ElapsedText, Mode=OneWay}" />
+                    <TextBlock
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="OperatorTotalText"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{x:Bind ViewModel.TotalText, Mode=OneWay}" />
+                </Grid>
             </StackPanel>
 
             <!-- Right: reservation queue -->
