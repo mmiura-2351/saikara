@@ -8,7 +8,11 @@
     mc:Ignorable="d">
 
     <!-- Background placeholder: a static gradient (REQUIREMENTS §5 — static image /
-         gradient first, looping video later). Telop and pitch bar sit on top. -->
+         gradient first, looping video later). Telop and pitch bar sit on top.
+
+         The telop deliberately uses a FIXED bright karaoke palette and does NOT follow
+         Light/Dark theme: the display surface is a performance output, not a themed app
+         page. Colors are inline literals on purpose (no ThemeResource). -->
     <Grid>
         <Grid.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -23,26 +27,41 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Lyric telop area (two-line, color-wipe wiring lands in P2) -->
+        <!-- Lyric telop area (two-line, color-wipe). The current line is a single TextBlock
+             whose Foreground is a horizontal gradient with two coincident stops: everything
+             before the shared offset is the "sung" color, everything after is "unsung".
+             Code-behind glides the shared offset to ViewModel.WipeFraction each frame. -->
         <StackPanel
             Grid.Row="0"
             Margin="48"
             VerticalAlignment="Center"
             Spacing="16">
             <TextBlock
+                x:Name="CurrentLineTextBlock"
                 AutomationProperties.AutomationId="DisplayCurrentLyric"
-                FontSize="56"
+                FontSize="64"
                 FontWeight="SemiBold"
-                Foreground="#FFFFFFFF"
-                Text="{x:Bind ViewModel.CurrentLyricLine, Mode=OneWay}"
+                Text="{x:Bind ViewModel.CurrentLineText, Mode=OneWay}"
                 TextAlignment="Center"
-                TextWrapping="Wrap" />
+                TextWrapping="Wrap">
+                <TextBlock.Foreground>
+                    <!-- Two coincident stops form the wipe boundary. SungStop/UnsungStop offsets are
+                         set from code-behind; colors are swapped to a flat bright fill when the line
+                         is the instrumental placeholder (no wipe). -->
+                    <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                        <GradientStop x:Name="SungStop" Offset="0.0" Color="#FFFFD54A" />
+                        <GradientStop x:Name="UnsungStop" Offset="0.0" Color="#FFFFFFFF" />
+                    </LinearGradientBrush>
+                </TextBlock.Foreground>
+            </TextBlock>
+
+            <!-- Next line: dimmer, un-wiped, shown ahead of the current line. -->
             <TextBlock
                 AutomationProperties.AutomationId="DisplayNextLyric"
-                FontSize="40"
+                FontSize="44"
                 FontWeight="SemiBold"
                 Foreground="#B3FFFFFF"
-                Text="{x:Bind ViewModel.NextLyricLine, Mode=OneWay}"
+                Text="{x:Bind ViewModel.NextLineText, Mode=OneWay}"
                 TextAlignment="Center"
                 TextWrapping="Wrap" />
         </StackPanel>
