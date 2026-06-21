@@ -81,10 +81,12 @@ The owner monitors only; this project must self-sustain across a long, context-l
 
 ## Status
 
-**P0 complete.** Solution; `Saikara.Core` (`MusicMath` + SQLite `ISongLibrary`/`SqliteSongLibrary`,
-30 passing tests); CI green (Linux + Windows); docs; autonomous-dev infra (agent, skills, memory);
-`Saikara.App` two-window WinUI app (MVVM + DI host) with the song library wired into the operator
-search and dual-monitor display placement (PRs #11–#13).
-**Next: P1 — MIDI playback (SoundFont).** MIDI model + load (DryWetMIDI, KAR/XF) in Core;
-SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction; transport;
-key change (transpose) + tempo change. See roadmap / issue #3.
+**P0 + P1 complete (P1 runtime-verified by the owner).** `Saikara.Core`: `MusicMath`, SQLite
+`ISongLibrary`, MIDI layer (`MidiSong`/`MidiLoader`/`MidiTransforms`/`MelodyTrackDetector`,
+DryWetMIDI), audio Core (`IAudioEngine`, `SoundFontInstaller`, `MidiSerializer`) — 84 tests.
+`Saikara.App`: two-window WinUI app; operator search + dual-monitor; `MeltySynthAudioEngine`
+(MeltySynth + NAudio) with Open-MIDI / play-pause-stop / seek / key / tempo — audio confirmed
+working (PRs #11–#19). GitHub Actions also publishes a self-contained runnable artifact.
+**Next: P2 — lyric telop (issue #4).** Group `MidiSong.Lyrics` into telop lines in Core;
+render a two-line color-wipe telop on the display window synced to playback; guide-melody on/off.
+The raw lyric events are already parsed in `MidiSong.Lyrics` (time + text + `IsLyric`).

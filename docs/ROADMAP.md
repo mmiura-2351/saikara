@@ -30,8 +30,8 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 - [x] Transport wiring + key/tempo in the operator UI: Open MIDI file, play/pause/stop,
       seek slider, key/tempo bound to the engine. PR #16.
 
-> **P1 build-complete; runtime audio verification pending** on a real Windows machine
-> (CI has no audio device — it only compiles). First "does it make sound" test is owner-run.
+> **P1 complete and runtime-verified by the owner.** Audio plays via SoundFont; key/tempo/seek
+> all work. A momentary swap glitch was fixed (synth reset + device pause during rebuild, PRs #18–#19).
 
 ## P2 — Lyric telop
 - [ ] Parse KAR/XF lyric + timing events in Core.
