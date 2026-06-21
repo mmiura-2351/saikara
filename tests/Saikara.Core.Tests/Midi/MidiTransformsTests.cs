@@ -221,4 +221,56 @@ public class MidiTransformsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => MidiTransforms.SetBeatsPerMinute(song, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => MidiTransforms.SetBeatsPerMinute(song, -10));
     }
+
+    // --- MuteTrack / UnmuteTrack (guide melody) ---
+
+    [Fact]
+    public void MuteTrack_SetsVelocityToZero()
+    {
+        MidiSong song = Load(new TestMidiBuilder(Tpqn)
+            .AddTrack(TestMidiBuilder.Note(60, 0, 0, Tpqn, velocity: 100))
+            .AddTrack(TestMidiBuilder.Note(64, 1, 0, Tpqn, velocity: 80)));
+
+        MidiSong muted = MidiTransforms.MuteTrack(song, 1);
+
+        Assert.All(muted.Tracks[1].Notes, n => Assert.Equal(0, n.Velocity));
+        Assert.All(muted.Tracks[0].Notes, n => Assert.True(n.Velocity > 0));
+    }
+
+    [Fact]
+    public void MuteTrack_OutOfRange_ReturnsUnchanged()
+    {
+        MidiSong song = Load(new TestMidiBuilder(Tpqn)
+            .AddTrack(TestMidiBuilder.Note(60, 0, 0, Tpqn)));
+
+        Assert.Same(song, MidiTransforms.MuteTrack(song, -1));
+        Assert.Same(song, MidiTransforms.MuteTrack(song, 99));
+    }
+
+    [Fact]
+    public void UnmuteTrack_RestoresOriginalVelocity()
+    {
+        MidiSong original = Load(new TestMidiBuilder(Tpqn)
+            .AddTrack(TestMidiBuilder.Note(60, 0, 0, Tpqn, velocity: 100))
+            .AddTrack(TestMidiBuilder.Note(64, 1, 0, Tpqn, velocity: 80)));
+
+        MidiSong muted = MidiTransforms.MuteTrack(original, 1);
+        Assert.Equal(0, muted.Tracks[1].Notes[0].Velocity);
+
+        MidiSong restored = MidiTransforms.UnmuteTrack(muted, original, 1);
+        Assert.Equal(80, restored.Tracks[1].Notes[0].Velocity);
+    }
+
+    [Fact]
+    public void MuteTrack_PreservesNoteStructure()
+    {
+        MidiSong song = Load(new TestMidiBuilder(Tpqn)
+            .AddTrack(TestMidiBuilder.Note(60, 0, 0, Tpqn, velocity: 100)
+                .Concat(TestMidiBuilder.Note(64, 0, Tpqn, Tpqn, velocity: 90))));
+
+        MidiSong muted = MidiTransforms.MuteTrack(song, 0);
+        Assert.Equal(song.Tracks[0].Notes.Count, muted.Tracks[0].Notes.Count);
+        Assert.Equal(60, muted.Tracks[0].Notes[0].NoteNumber);
+        Assert.Equal(64, muted.Tracks[0].Notes[1].NoteNumber);
+    }
 }

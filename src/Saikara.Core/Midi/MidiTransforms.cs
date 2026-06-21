@@ -143,6 +143,54 @@ public static class MidiTransforms
     private static TimeSpan Scale(TimeSpan value, double scale)
         => TimeSpan.FromTicks((long)Math.Round(value.Ticks * scale));
 
+    /// <summary>
+    /// Returns a copy of <paramref name="song"/> with the specified track muted (all note
+    /// velocities set to 0). Used to silence the guide melody while keeping the track's
+    /// note structure intact for scoring and telop. Out-of-range index returns the song unchanged.
+    /// </summary>
+    public static MidiSong MuteTrack(MidiSong song, int trackIndex)
+    {
+        ArgumentNullException.ThrowIfNull(song);
+        if (trackIndex < 0 || trackIndex >= song.Tracks.Count)
+        {
+            return song;
+        }
+
+        var tracks = song.Tracks.Select((track, i) => i == trackIndex
+            ? track with { Notes = track.Notes.Select(n => n with { Velocity = 0 }).ToList() }
+            : track).ToList();
+
+        return song with { Tracks = tracks };
+    }
+
+    /// <summary>
+    /// Returns a copy of <paramref name="song"/> with the specified track un-muted by
+    /// restoring note velocities from <paramref name="original"/>. This reverses
+    /// <see cref="MuteTrack"/>. Out-of-range index or track-length mismatch returns
+    /// <paramref name="song"/> unchanged.
+    /// </summary>
+    public static MidiSong UnmuteTrack(MidiSong song, MidiSong original, int trackIndex)
+    {
+        ArgumentNullException.ThrowIfNull(song);
+        ArgumentNullException.ThrowIfNull(original);
+        if (trackIndex < 0 || trackIndex >= song.Tracks.Count
+            || trackIndex >= original.Tracks.Count
+            || song.Tracks[trackIndex].Notes.Count != original.Tracks[trackIndex].Notes.Count)
+        {
+            return song;
+        }
+
+        var origNotes = original.Tracks[trackIndex].Notes;
+        var tracks = song.Tracks.Select((track, i) => i == trackIndex
+            ? track with
+            {
+                Notes = track.Notes.Select((n, j) => n with { Velocity = origNotes[j].Velocity }).ToList()
+            }
+            : track).ToList();
+
+        return song with { Tracks = tracks };
+    }
+
     private static long ScaleMicros(long micros, double scale)
         => Math.Clamp((long)Math.Round(micros * scale), 1, 16_777_215);
 }

@@ -180,6 +180,13 @@
                     SpinButtonPlacementMode="Inline"
                     Value="{x:Bind ViewModel.TempoPercent, Mode=TwoWay}" />
 
+                <ToggleSwitch
+                    AutomationProperties.AutomationId="OperatorGuideMelodyToggle"
+                    Header="Guide melody"
+                    IsOn="{x:Bind ViewModel.IsGuideMelodyEnabled, Mode=TwoWay}"
+                    OffContent="Off"
+                    OnContent="On" />
+
                 <!-- Playback transport (P1) -->
                 <TextBlock
                     Margin="0,8,0,0"
