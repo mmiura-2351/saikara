@@ -29,3 +29,35 @@ jobs:
           global-json-file: global.json
       - name: Build solution
         run: dotnet build saikara.sln --configuration Release --nologo
+
+  package:
+    name: Package runnable app (Windows)
+    runs-on: windows-latest
+    needs: windows
+    # Only build the downloadable artifact for main and on-demand runs — not every PR.
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # Self-contained, unpackaged (Win32) publish: bundles the .NET runtime AND the
+      # Windows App SDK runtime, so the artifact runs by double-clicking Saikara.App.exe
+      # with nothing pre-installed (no Visual Studio, no WinAppSDK runtime).
+      - name: Publish self-contained (win-x64)
+        run: >
+          dotnet publish src/Saikara.App/Saikara.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:Platform=x64
+          -p:WindowsPackageType=None
+          -p:WindowsAppSDKSelfContained=true
+          --output publish/saikara-win-x64
+          --nologo
+      - name: Upload runnable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saikara-win-x64
+          path: publish/saikara-win-x64
+          retention-days: 14

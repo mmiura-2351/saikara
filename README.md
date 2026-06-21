@@ -10,6 +10,19 @@ operator/display layout, a reservation queue, and library/score history.
 
 Early development. See [docs/ROADMAP.md](docs/ROADMAP.md) for the plan and progress.
 
+## Run it (no build needed)
+
+GitHub Actions builds a ready-to-run, self-contained Windows package on every push to
+`main` — no Visual Studio, .NET, or Windows App SDK install required.
+
+1. Open the [latest **CI** run on `main`](https://github.com/mmiura-2351/saikara/actions/workflows/ci.yml?query=branch%3Amain)
+   (or trigger one via **Run workflow**).
+2. Download the **`saikara-win-x64`** artifact and unzip it.
+3. Run **`Saikara.App.exe`**. (Unsigned, so Windows SmartScreen may warn — *More info →
+   Run anyway*. Code signing comes in the packaging phase.)
+4. First launch downloads the default SoundFont (~32 MB) to
+   `%LOCALAPPDATA%\Saikara\soundfonts\`. Then **Open MIDI file…** → **Play**.
+
 ## Tech
 
 WinUI 3 · .NET 8 · C# · MVVM · DryWetMIDI · MeltySynth/FluidSynth · NAudio (WASAPI) · SQLite.
