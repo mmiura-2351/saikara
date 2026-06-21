@@ -10,6 +10,7 @@ using Saikara.App.Services;
 using Saikara.App.ViewModels;
 using Saikara.App.Views;
 using Saikara.Core.Audio;
+using Saikara.Core.History;
 using Saikara.Core.Import;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
@@ -58,6 +59,11 @@ public partial class App : Application
         // is idempotent (CREATE TABLE IF NOT EXISTS), so a repeat call is harmless.
         var library = GetService<ISongLibrary>();
         await library.InitializeAsync();
+
+        // P5: create the score-history schema before any score is saved. Shares the same SQLite DB
+        // file as the library (a separate Scores table); InitializeAsync is idempotent.
+        var scoreHistory = GetService<IScoreHistory>();
+        await scoreHistory.InitializeAsync();
 
         // P1 audio bootstrap. Ensure the default SoundFont exists (first-run download), then
         // build the audio engine on the UI thread so its DispatcherQueueTimer marshals
@@ -131,6 +137,16 @@ public partial class App : Application
         // of the unpackaged app and is per-user.
         services.AddSingleton<ISongLibrary>(_ => new SqliteSongLibrary(GetLibraryDatabasePath()));
 
+        // P5 score & history persistence (REQUIREMENTS §5). Singleton over the SAME SQLite DB file as
+        // the library (its own Scores table + index, created by InitializeAsync at startup). One
+        // history instance is shared so the display window's saves and best/recent lookups hit the
+        // same open connection.
+        services.AddSingleton<IScoreHistory>(_ => new SqliteScoreHistory(GetLibraryDatabasePath()));
+
+        // P5 shared current-song state. Singleton so the operator (which sets it on load) and the
+        // display (which reads it when a score is produced) agree on what is playing.
+        services.AddSingleton<INowPlaying, NowPlaying>();
+
         // P1 audio + MIDI (REQUIREMENTS §4). The HttpClient powers the first-run SoundFont
         // download; SoundFontInstaller resolves/creates the default .sf2; MidiLoader parses
         // SMF/KAR into the Core model.
@@ -178,6 +194,8 @@ public partial class App : Application
             sp.GetRequiredService<IAudioEngine>(),
             sp.GetRequiredService<IPitchMonitor>(),
             sp.GetRequiredService<IScoringEngine>(),
+            sp.GetRequiredService<IScoreHistory>(),
+            sp.GetRequiredService<INowPlaying>(),
             DispatcherQueue.GetForCurrentThread()));
 
         // Windows. Transient: a window is consumed once at launch.

@@ -1,11 +1,17 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Saikara.App.Audio;
+using Saikara.App.Services;
 using Saikara.Core.Audio;
+using Saikara.Core.History;
+using Saikara.Core.Library;
 using Saikara.Core.Lyrics;
 using Saikara.Core.Music;
 using Saikara.Core.Scoring;
@@ -52,11 +58,16 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
     private const int DefaultAxisMin = 48;
     private const int DefaultAxisMax = 72;
 
+    /// <summary>How many recent per-song scores to surface on the result overlay (newest first).</summary>
+    private const int RecentHistoryLimit = 5;
+
     private readonly IAudioEngine _audioEngine;
     private readonly ITelopSource? _telopSource;
     private readonly IReferenceSource? _referenceSource;
     private readonly IPitchMonitor? _pitchMonitor;
     private readonly IScoringEngine _scoringEngine;
+    private readonly IScoreHistory _scoreHistory;
+    private readonly INowPlaying _nowPlaying;
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly DispatcherQueueTimer? _frameTimer;
 
@@ -82,11 +93,15 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         IAudioEngine audioEngine,
         IPitchMonitor pitchMonitor,
         IScoringEngine scoringEngine,
+        IScoreHistory scoreHistory,
+        INowPlaying nowPlaying,
         DispatcherQueue dispatcherQueue)
     {
         ArgumentNullException.ThrowIfNull(audioEngine);
         ArgumentNullException.ThrowIfNull(pitchMonitor);
         ArgumentNullException.ThrowIfNull(scoringEngine);
+        ArgumentNullException.ThrowIfNull(scoreHistory);
+        ArgumentNullException.ThrowIfNull(nowPlaying);
         ArgumentNullException.ThrowIfNull(dispatcherQueue);
 
         _dispatcherQueue = dispatcherQueue;
@@ -95,6 +110,8 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         _referenceSource = audioEngine as IReferenceSource;
         _pitchMonitor = pitchMonitor;
         _scoringEngine = scoringEngine;
+        _scoreHistory = scoreHistory;
+        _nowPlaying = nowPlaying;
 
         if (_referenceSource is not null)
         {
@@ -257,6 +274,39 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _kobushiCountText = string.Empty;
 
+    // ---- Score history (P5) ----
+
+    /// <summary>
+    /// <see langword="true"/> when the song has a personal best to show on the overlay (it is a
+    /// library entry with at least one stored score). The view binds the "Best:" line's visibility
+    /// to this; <see langword="false"/> for an ad-hoc opened file or a song with no history yet.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasBestScore;
+
+    /// <summary>
+    /// The personal-best line for the current song, e.g. <c>"Best: 87 (A)"</c>. Empty and hidden
+    /// (see <see cref="HasBestScore"/>) when there is no best to show. Built from
+    /// <see cref="IScoreHistory.GetBestAsync"/> after the new score is saved, so it already reflects
+    /// the just-finished run.
+    /// </summary>
+    [ObservableProperty]
+    private string _bestScoreText = string.Empty;
+
+    /// <summary>
+    /// <see langword="true"/> when there is a recent-scores list to show (a library entry with
+    /// stored history). The view binds the recent list's visibility to this.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasRecentScores;
+
+    /// <summary>
+    /// The song's most recent scores (newest first, capped at <see cref="RecentHistoryLimit"/>),
+    /// shown as a small list on the overlay. Stable instance, mutated in place on the UI thread so
+    /// the bound list keeps its <c>ItemsSource</c>.
+    /// </summary>
+    public ObservableCollection<ScoreHistoryItem> RecentScores { get; } = new();
+
     /// <summary>Hides the result overlay. Bound to the overlay's Close button.</summary>
     [RelayCommand]
     private void CloseResult() => IsResultVisible = false;
@@ -321,7 +371,133 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         }
 
         ScoreResult result = _scoringEngine.Score(samples, reference);
+
+        // Capture the song under which this run was performed *now* (the shared current-song state can
+        // change once the operator loads the next song). Used both to attach the saved record and to
+        // key the per-song best/recent lookups.
+        Song? song = _nowPlaying.CurrentSong;
+
         ShowResult(result);
+
+        // Persist and surface history off the UI thread; this must never block the overlay or throw
+        // into the transport callback. Fire-and-forget with internal error handling (see below).
+        _ = PersistAndLoadHistoryAsync(result, song);
+    }
+
+    /// <summary>
+    /// Saves the just-shown <see cref="ScoreResult"/> to the score history, then loads and displays
+    /// the song's personal best and recent scores. Runs as a detached task so the result overlay is
+    /// never blocked; all failures are swallowed (the overlay still shows the fresh score, just
+    /// without history). The song's <see cref="Song.Number"/> keys the per-song lookups; an ad-hoc
+    /// opened file (null song / empty number) is still recorded but shows no best/recent list.
+    /// </summary>
+    private async Task PersistAndLoadHistoryAsync(ScoreResult result, Song? song)
+    {
+        ScoreRecord record = ScoreRecord.FromScoreResult(
+            result,
+            song?.Number ?? string.Empty,
+            song?.Title ?? "(opened file)",
+            song?.Artist ?? "Unknown",
+            DateTimeOffset.Now,
+            _audioEngine.SemitoneOffset,
+            _audioEngine.TempoPercent);
+
+        try
+        {
+            await _scoreHistory.AddAsync(record).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // History persistence is best-effort: a DB error must not disrupt the result screen.
+            System.Diagnostics.Debug.WriteLine($"[Saikara] Failed to save score history: {ex}");
+            return;
+        }
+
+        // Per-song best/recent only make sense for a library song with a number. For an ad-hoc file
+        // (or a numberless library entry) leave the history section hidden.
+        string? number = song?.Number;
+        if (string.IsNullOrEmpty(number))
+        {
+            ClearHistoryDisplay();
+            return;
+        }
+
+        ScoreRecord? best;
+        IReadOnlyList<ScoreRecord> recent;
+        try
+        {
+            best = await _scoreHistory.GetBestAsync(number).ConfigureAwait(false);
+            recent = await _scoreHistory.GetForSongAsync(number).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Saikara] Failed to load score history: {ex}");
+            return;
+        }
+
+        // Marshal the display updates back to the UI thread (this method runs detached / off-thread).
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ShowHistory(best, recent);
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(() => ShowHistory(best, recent));
+        }
+    }
+
+    /// <summary>
+    /// Pushes the loaded best/recent history into the bound properties. Runs on the UI thread.
+    /// </summary>
+    private void ShowHistory(ScoreRecord? best, IReadOnlyList<ScoreRecord> recent)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        CultureInfo culture = CultureInfo.InvariantCulture;
+
+        if (best is not null)
+        {
+            int bestOverall = (int)Math.Round(best.Overall, MidpointRounding.AwayFromZero);
+            BestScoreText = $"Best: {bestOverall.ToString(culture)} ({best.Grade})";
+            HasBestScore = true;
+        }
+        else
+        {
+            BestScoreText = string.Empty;
+            HasBestScore = false;
+        }
+
+        RecentScores.Clear();
+        foreach (ScoreRecord rec in recent.Take(RecentHistoryLimit))
+        {
+            RecentScores.Add(ScoreHistoryItem.FromRecord(rec, culture));
+        }
+
+        HasRecentScores = RecentScores.Count > 0;
+    }
+
+    /// <summary>Hides the history section (ad-hoc file or numberless entry). Runs on the UI thread.</summary>
+    private void ClearHistoryDisplay()
+    {
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ResetHistory();
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(ResetHistory);
+        }
+    }
+
+    private void ResetHistory()
+    {
+        BestScoreText = string.Empty;
+        HasBestScore = false;
+        RecentScores.Clear();
+        HasRecentScores = false;
     }
 
     /// <summary>
@@ -349,6 +525,10 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         VibratoCountText = result.VibratoCount.ToString(culture);
         ShakuriCountText = result.ShakuriCount.ToString(culture);
         KobushiCountText = result.KobushiCount.ToString(culture);
+
+        // Reset any history left over from a previous result; the async save/load (started by
+        // TryScoreAndShow) repopulates it for this song shortly after the overlay appears.
+        ResetHistory();
 
         IsResultVisible = true;
     }
