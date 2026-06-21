@@ -128,6 +128,10 @@ public partial class OperatorViewModel : ObservableObject
     [ObservableProperty]
     private double _tempoPercent = 100;
 
+    /// <summary>Whether the melody track is played audibly (guide melody). Default on.</summary>
+    [ObservableProperty]
+    private bool _isGuideMelodyEnabled = true;
+
     /// <summary>Name of the currently loaded MIDI file (file name only), or a prompt when none.</summary>
     [ObservableProperty]
     private string _loadedFileName = "No file loaded";
@@ -422,6 +426,15 @@ public partial class OperatorViewModel : ObservableObject
 
     /// <summary>Pushes a key change to the engine when <see cref="KeyOffset"/> changes.</summary>
     partial void OnKeyOffsetChanged(int value) => _audioEngine.SemitoneOffset = value;
+
+    /// <summary>Pushes the guide-melody toggle to the concrete engine.</summary>
+    partial void OnIsGuideMelodyEnabledChanged(bool value)
+    {
+        if (_audioEngine is MeltySynthAudioEngine concrete)
+        {
+            concrete.IsGuideMelodyEnabled = value;
+        }
+    }
 
     /// <summary>Pushes a tempo change to the engine when <see cref="TempoPercent"/> changes.</summary>
     partial void OnTempoPercentChanged(double value)

@@ -81,6 +81,7 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
 
     private int _semitoneOffset;
     private double _tempoPercent = 100.0;
+    private bool _isGuideMelodyEnabled = true;
 
     private PlaybackState _state = PlaybackState.Stopped;
     private TimeSpan _duration = TimeSpan.Zero;
@@ -202,6 +203,26 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
             }
 
             _tempoPercent = value;
+            RebuildPreservingPosition();
+        }
+    }
+
+    /// <summary>
+    /// Whether the guide melody (melody track audio) is played through the synth.
+    /// When <see langword="false"/>, the melody track's note velocities are zeroed so it is
+    /// silent but the track structure (and the reference for scoring/pitch-bar) is preserved.
+    /// </summary>
+    public bool IsGuideMelodyEnabled
+    {
+        get => _isGuideMelodyEnabled;
+        set
+        {
+            if (_isGuideMelodyEnabled == value)
+            {
+                return;
+            }
+
+            _isGuideMelodyEnabled = value;
             RebuildPreservingPosition();
         }
     }
@@ -361,7 +382,21 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
         // Apply key then tempo on top of the untouched source, mirroring the contract.
         MidiSong transformed = MidiTransforms.Transpose(_sourceSong, _semitoneOffset);
         transformed = MidiTransforms.ScaleTempo(transformed, _tempoPercent);
-        byte[] bytes = _serializer.ToBytes(transformed);
+
+        // Mute the melody track when guide melody is disabled. The mute operates on the
+        // serialized bytes (zeroed velocity) but the reference/telop are still derived from
+        // the pre-mute transformed song so scoring and lyric sync are unaffected.
+        MidiSong forSynth = transformed;
+        if (!_isGuideMelodyEnabled)
+        {
+            int? melodyIdx = MelodyTrackDetector.Detect(transformed);
+            if (melodyIdx is int idx)
+            {
+                forSynth = MidiTransforms.MuteTrack(transformed, idx);
+            }
+        }
+
+        byte[] bytes = _serializer.ToBytes(forSynth);
 
         // Duration tracks the transformed (tempo-scaled) song, as the contract requires.
         _duration = transformed.Duration;
