@@ -13,6 +13,7 @@ using Saikara.Core.Audio;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
 using Saikara.Core.Pitch;
+using Saikara.Core.Scoring;
 
 namespace Saikara.App;
 
@@ -150,6 +151,11 @@ public partial class App : Application
         services.AddSingleton<PitchMonitorHolder>();
         services.AddSingleton<IPitchMonitor>(sp => sp.GetRequiredService<PitchMonitorHolder>().Monitor);
 
+        // P4 scoring (REQUIREMENTS §6). The scoring engine is platform-agnostic, pure and
+        // deterministic, so it is built eagerly and shared. DisplayViewModel runs it once at
+        // song end against the collected mic samples and the reference melody.
+        services.AddSingleton<IScoringEngine, ScoringEngine>();
+
         // View-models. Transient so each window instance gets its own state.
         services.AddTransient<OperatorViewModel>();
 
@@ -160,6 +166,7 @@ public partial class App : Application
         services.AddTransient(sp => new DisplayViewModel(
             sp.GetRequiredService<IAudioEngine>(),
             sp.GetRequiredService<IPitchMonitor>(),
+            sp.GetRequiredService<IScoringEngine>(),
             DispatcherQueue.GetForCurrentThread()));
 
         // Windows. Transient: a window is consumed once at launch.

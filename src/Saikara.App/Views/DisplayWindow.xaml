@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:Saikara.App.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
@@ -116,5 +117,240 @@
             Foreground="#80FFFFFF"
             Text="Display output — secondary monitor"
             TextAlignment="Center" />
+
+        <!-- Scoring result overlay (P4). Spans the whole surface and dims the telop/pitch bar
+             behind it. Shown at song end via ViewModel.IsResultVisible; the Close button hides it.
+             Fixed bright karaoke palette on a dark scrim — deliberately NOT themed, like the rest
+             of the display surface (no ThemeResource). Inline color literals are intentional. -->
+        <Grid
+            Grid.RowSpan="3"
+            Background="#CC000820"
+            Visibility="{x:Bind local:DisplayWindow.BoolToVisibility(ViewModel.IsResultVisible), Mode=OneWay}">
+            <Border
+                MaxWidth="720"
+                Margin="48"
+                Padding="48,40"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="#F2101830"
+                BorderBrush="#33FFFFFF"
+                BorderThickness="1"
+                CornerRadius="16">
+                <StackPanel Spacing="24">
+                    <!-- Header: overall score (large) + grade (prominent) -->
+                    <TextBlock
+                        FontSize="20"
+                        FontWeight="SemiBold"
+                        Foreground="#B3FFFFFF"
+                        Text="採点結果 — Result"
+                        TextAlignment="Center" />
+
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="32">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultOverall"
+                                FontSize="96"
+                                FontWeight="SemiBold"
+                                Foreground="#FFFFD54A"
+                                Text="{x:Bind ViewModel.OverallScore, Mode=OneWay}"
+                                TextAlignment="Center" />
+                            <TextBlock
+                                FontSize="14"
+                                Foreground="#80FFFFFF"
+                                Text="点 / 100"
+                                TextAlignment="Center" />
+                        </StackPanel>
+
+                        <Border
+                            Width="120"
+                            Height="120"
+                            VerticalAlignment="Center"
+                            Background="#1AFFFFFF"
+                            CornerRadius="60">
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultGrade"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="72"
+                                FontWeight="SemiBold"
+                                Foreground="#FF35E0FF"
+                                Text="{x:Bind ViewModel.Grade, Mode=OneWay}" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Sub-score breakdown: labelled ProgressBars -->
+                    <Grid ColumnSpacing="16" RowSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="56" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="音程 Pitch" />
+                        <ProgressBar
+                            Grid.Row="0"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="DisplayResultPitchBar"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{x:Bind ViewModel.PitchAccuracyValue, Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Row="0"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="{x:Bind ViewModel.PitchAccuracyText, Mode=OneWay}"
+                            TextAlignment="Right" />
+
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="安定性 Stability" />
+                        <ProgressBar
+                            Grid.Row="1"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="DisplayResultStabilityBar"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{x:Bind ViewModel.StabilityValue, Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="{x:Bind ViewModel.StabilityText, Mode=OneWay}"
+                            TextAlignment="Right" />
+
+                        <TextBlock
+                            Grid.Row="2"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="抑揚 Expression" />
+                        <ProgressBar
+                            Grid.Row="2"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="DisplayResultExpressionBar"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{x:Bind ViewModel.ExpressionValue, Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Row="2"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="{x:Bind ViewModel.ExpressionText, Mode=OneWay}"
+                            TextAlignment="Right" />
+
+                        <TextBlock
+                            Grid.Row="3"
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="ロングトーン Long tone" />
+                        <ProgressBar
+                            Grid.Row="3"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="DisplayResultLongToneBar"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{x:Bind ViewModel.LongToneValue, Mode=OneWay}" />
+                        <TextBlock
+                            Grid.Row="3"
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="#FFFFFFFF"
+                            Text="{x:Bind ViewModel.LongToneText, Mode=OneWay}"
+                            TextAlignment="Right" />
+                    </Grid>
+
+                    <!-- Technique counts -->
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        Orientation="Horizontal"
+                        Spacing="32">
+                        <StackPanel>
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultVibrato"
+                                FontSize="28"
+                                FontWeight="SemiBold"
+                                Foreground="#FF35E0FF"
+                                Text="{x:Bind ViewModel.VibratoCountText, Mode=OneWay}"
+                                TextAlignment="Center" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="#B3FFFFFF"
+                                Text="ビブラート"
+                                TextAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultShakuri"
+                                FontSize="28"
+                                FontWeight="SemiBold"
+                                Foreground="#FF35E0FF"
+                                Text="{x:Bind ViewModel.ShakuriCountText, Mode=OneWay}"
+                                TextAlignment="Center" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="#B3FFFFFF"
+                                Text="しゃくり"
+                                TextAlignment="Center" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultKobushi"
+                                FontSize="28"
+                                FontWeight="SemiBold"
+                                Foreground="#FF35E0FF"
+                                Text="{x:Bind ViewModel.KobushiCountText, Mode=OneWay}"
+                                TextAlignment="Center" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="#B3FFFFFF"
+                                Text="こぶし"
+                                TextAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button
+                        Margin="0,8,0,0"
+                        Padding="40,10"
+                        HorizontalAlignment="Center"
+                        AutomationProperties.AutomationId="DisplayResultClose"
+                        AutomationProperties.Name="Close result"
+                        Command="{x:Bind ViewModel.CloseResultCommand}"
+                        Content="閉じる Close" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

@@ -1,5 +1,8 @@
 using System;
+using System.Globalization;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Saikara.App.Audio;
 using Saikara.Core.Audio;
@@ -49,11 +52,20 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
     private const int DefaultAxisMin = 48;
     private const int DefaultAxisMax = 72;
 
+    private readonly IAudioEngine _audioEngine;
     private readonly ITelopSource? _telopSource;
     private readonly IReferenceSource? _referenceSource;
     private readonly IPitchMonitor? _pitchMonitor;
+    private readonly IScoringEngine _scoringEngine;
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly DispatcherQueueTimer? _frameTimer;
+
+    /// <summary>
+    /// The transport state seen on the previous <see cref="IAudioEngine.StateChanged"/>. Used to fire
+    /// scoring only on a Playing → Stopped transition (a song that actually ran and ended/was stopped),
+    /// never on a Stop that happens before any playback (e.g. the engine settling to Stopped on Load).
+    /// </summary>
+    private PlaybackState _lastPlaybackState = PlaybackState.Stopped;
 
     private TelopPlayback _playback = new(Array.Empty<TelopLine>());
     private System.Collections.Generic.IReadOnlyList<ReferenceNote> _referenceNotes = Array.Empty<ReferenceNote>();
@@ -66,16 +78,23 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
     /// </summary>
     private const string InstrumentalPlaceholder = "♪";
 
-    public DisplayViewModel(IAudioEngine audioEngine, IPitchMonitor pitchMonitor, DispatcherQueue dispatcherQueue)
+    public DisplayViewModel(
+        IAudioEngine audioEngine,
+        IPitchMonitor pitchMonitor,
+        IScoringEngine scoringEngine,
+        DispatcherQueue dispatcherQueue)
     {
         ArgumentNullException.ThrowIfNull(audioEngine);
         ArgumentNullException.ThrowIfNull(pitchMonitor);
+        ArgumentNullException.ThrowIfNull(scoringEngine);
         ArgumentNullException.ThrowIfNull(dispatcherQueue);
 
         _dispatcherQueue = dispatcherQueue;
+        _audioEngine = audioEngine;
         _telopSource = audioEngine as ITelopSource;
         _referenceSource = audioEngine as IReferenceSource;
         _pitchMonitor = pitchMonitor;
+        _scoringEngine = scoringEngine;
 
         if (_referenceSource is not null)
         {
@@ -84,6 +103,13 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         }
 
         _pitchMonitor.PitchDetected += OnPitchDetected;
+
+        // P4: score and show the result at song end. The engine raises StateChanged when playback
+        // settles to Stopped (OnPositionTimerTick on end-of-song, or an explicit Stop); we score only
+        // on a real Playing → Stopped transition (see OnPlaybackStateChanged), so a Stop before any
+        // playback never triggers scoring. The handler marshals to the UI thread.
+        _audioEngine.StateChanged += OnPlaybackStateChanged;
+        _lastPlaybackState = _audioEngine.State;
 
         if (_telopSource is not null)
         {
@@ -168,6 +194,164 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether the microphone is unavailable, so the view can show a "no mic" hint.</summary>
     public bool IsMicAvailable => _pitchMonitor?.IsAvailable ?? false;
+
+    // ---- Scoring result (P4) ----
+
+    /// <summary>
+    /// <see langword="true"/> while the end-of-song result overlay is shown. Set by
+    /// <see cref="ShowResult"/> at song end and cleared by <see cref="CloseResultCommand"/>. The view
+    /// binds the overlay's visibility to this.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isResultVisible;
+
+    /// <summary>The overall score, 0-100, shown large. Rounded to a whole number for display.</summary>
+    [ObservableProperty]
+    private int _overallScore;
+
+    /// <summary>The coarse letter grade (S/A/B/C/D/E) shown prominently next to the overall score.</summary>
+    [ObservableProperty]
+    private string _grade = string.Empty;
+
+    /// <summary>Pitch-accuracy (音程) sub-score, 0-100, formatted for display.</summary>
+    [ObservableProperty]
+    private string _pitchAccuracyText = string.Empty;
+
+    /// <summary>Stability (安定性) sub-score, 0-100, formatted for display.</summary>
+    [ObservableProperty]
+    private string _stabilityText = string.Empty;
+
+    /// <summary>Expression (抑揚) sub-score, 0-100, formatted for display.</summary>
+    [ObservableProperty]
+    private string _expressionText = string.Empty;
+
+    /// <summary>Long-tone (ロングトーン) sub-score, 0-100, formatted for display.</summary>
+    [ObservableProperty]
+    private string _longToneText = string.Empty;
+
+    /// <summary>Pitch-accuracy sub-score as a <c>[0, 100]</c> value bound to a ProgressBar.</summary>
+    [ObservableProperty]
+    private double _pitchAccuracyValue;
+
+    /// <summary>Stability sub-score as a <c>[0, 100]</c> value bound to a ProgressBar.</summary>
+    [ObservableProperty]
+    private double _stabilityValue;
+
+    /// <summary>Expression sub-score as a <c>[0, 100]</c> value bound to a ProgressBar.</summary>
+    [ObservableProperty]
+    private double _expressionValue;
+
+    /// <summary>Long-tone sub-score as a <c>[0, 100]</c> value bound to a ProgressBar.</summary>
+    [ObservableProperty]
+    private double _longToneValue;
+
+    /// <summary>Detected vibrato (ビブラート) count, formatted for display.</summary>
+    [ObservableProperty]
+    private string _vibratoCountText = string.Empty;
+
+    /// <summary>Detected shakuri (しゃくり) count, formatted for display.</summary>
+    [ObservableProperty]
+    private string _shakuriCountText = string.Empty;
+
+    /// <summary>Detected kobushi (こぶし) count, formatted for display.</summary>
+    [ObservableProperty]
+    private string _kobushiCountText = string.Empty;
+
+    /// <summary>Hides the result overlay. Bound to the overlay's Close button.</summary>
+    [RelayCommand]
+    private void CloseResult() => IsResultVisible = false;
+
+    /// <summary>
+    /// Handles a transport state change. Scoring runs only on a real <see cref="PlaybackState.Playing"/>
+    /// → <see cref="PlaybackState.Stopped"/> transition (a song that actually ran and then ended or was
+    /// stopped), so a Stop that happens before any playback (e.g. on Load) is ignored. Marshals to the
+    /// UI thread because <see cref="IAudioEngine.StateChanged"/> may arrive on a background thread.
+    /// </summary>
+    private void OnPlaybackStateChanged(object? sender, EventArgs e)
+    {
+        PlaybackState state = _audioEngine.State;
+
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ApplyPlaybackState(state);
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(() => ApplyPlaybackState(state));
+        }
+    }
+
+    private void ApplyPlaybackState(PlaybackState state)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        bool endedFromPlaying = state == PlaybackState.Stopped && _lastPlaybackState == PlaybackState.Playing;
+        _lastPlaybackState = state;
+
+        if (endedFromPlaying)
+        {
+            TryScoreAndShow();
+        }
+    }
+
+    /// <summary>
+    /// Scores the just-finished performance and, when there is something to show, reveals the result
+    /// overlay. Skips silently (no overlay) when there is no reference melody (instrumental) or no
+    /// voiced mic samples (no microphone / no singing), so an instrumental playthrough or a run with
+    /// the mic off never pops a meaningless all-zero score.
+    /// </summary>
+    private void TryScoreAndShow()
+    {
+        if (_pitchMonitor is null || _referenceSource is null)
+        {
+            return;
+        }
+
+        var samples = _pitchMonitor.CollectedSamples;
+        var reference = _referenceSource.CurrentReferenceNotes;
+
+        // No reference (instrumental / undetected melody) or no voiced singing → nothing meaningful to
+        // score. The scoring engine would return ScoreResult.Empty (all zeros); skip the overlay.
+        if (reference.Count == 0 || !samples.Any(s => s.IsVoiced))
+        {
+            return;
+        }
+
+        ScoreResult result = _scoringEngine.Score(samples, reference);
+        ShowResult(result);
+    }
+
+    /// <summary>
+    /// Pushes a <see cref="ScoreResult"/> into the bound result properties and shows the overlay.
+    /// Numbers are formatted with the invariant culture so the display is stable regardless of the
+    /// machine locale. Runs on the UI thread (callers marshal first).
+    /// </summary>
+    private void ShowResult(ScoreResult result)
+    {
+        CultureInfo culture = CultureInfo.InvariantCulture;
+
+        OverallScore = (int)Math.Round(result.Overall, MidpointRounding.AwayFromZero);
+        Grade = result.Grade;
+
+        PitchAccuracyValue = result.PitchAccuracy;
+        StabilityValue = result.Stability;
+        ExpressionValue = result.Expression;
+        LongToneValue = result.LongTone;
+
+        PitchAccuracyText = result.PitchAccuracy.ToString("0", culture);
+        StabilityText = result.Stability.ToString("0", culture);
+        ExpressionText = result.Expression.ToString("0", culture);
+        LongToneText = result.LongTone.ToString("0", culture);
+
+        VibratoCountText = result.VibratoCount.ToString(culture);
+        ShakuriCountText = result.ShakuriCount.ToString(culture);
+        KobushiCountText = result.KobushiCount.ToString(culture);
+
+        IsResultVisible = true;
+    }
 
     // ---- Reference handling ----
 
@@ -416,5 +600,7 @@ public partial class DisplayViewModel : ObservableObject, IDisposable
         {
             _pitchMonitor.PitchDetected -= OnPitchDetected;
         }
+
+        _audioEngine.StateChanged -= OnPlaybackStateChanged;
     }
 }
