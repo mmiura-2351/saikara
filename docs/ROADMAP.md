@@ -48,8 +48,12 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 - [ ] Latency calibration between synthesized backing and mic.
 
 ## P4 — Scoring (basic -> full)
-- [ ] Pitch-accuracy score in Core (deterministic, unit-tested).
-- [ ] Full DAM-style metrics: stability, dynamics, long-tone, vibrato, *shakuri*, *kobushi*.
+- [x] Pitch-accuracy score in Core (deterministic, unit-tested).
+- [x] Full DAM-style metrics in Core: stability, expression (dynamics), long-tone, vibrato,
+      *shakuri*, *kobushi* (`Saikara.Core.Scoring`: `ScoringEngine`/`IScoringEngine`,
+      `ScoreResult`, `ScoringOptions`, `PitchSample`, `ReferenceNote`, `ReferenceMelody`).
+      34 tests.
+- [ ] Mic -> `PitchSample` plumbing in App (latency-corrected playback time + energy channel).
 - [ ] Result screen.
 
 ## P5 — Library & operation
