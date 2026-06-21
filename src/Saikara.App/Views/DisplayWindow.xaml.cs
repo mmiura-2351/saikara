@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Saikara.App.ViewModels;
 using Windows.Graphics;
 using Windows.UI;
@@ -52,10 +53,22 @@ public sealed partial class DisplayWindow : Window
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(DisplayViewModel.WipeFraction)
-            or nameof(DisplayViewModel.HasCurrentLyric))
+        switch (e.PropertyName)
         {
-            ApplyWipe();
+            case nameof(DisplayViewModel.WipeFraction):
+            case nameof(DisplayViewModel.HasCurrentLyric):
+                ApplyWipe();
+                break;
+
+            case nameof(DisplayViewModel.HasReferenceNote):
+            case nameof(DisplayViewModel.ReferenceNormalized):
+                UpdateReferenceLine();
+                break;
+
+            case nameof(DisplayViewModel.IsSungVoiced):
+            case nameof(DisplayViewModel.SungNormalized):
+                UpdateSungMarker();
+                break;
         }
     }
 
@@ -91,6 +104,84 @@ public sealed partial class DisplayWindow : Window
         // after it.
         SungStop.Offset = fraction;
         UnsungStop.Offset = fraction;
+    }
+
+    /// <summary>
+    /// Recomputes pitch-bar layout when the canvas is first measured or resized: the reference
+    /// segment's width and horizontal placement, then both shapes' positions for the current VM state.
+    /// </summary>
+    private void OnPitchCanvasSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateReferenceLine();
+        UpdateSungMarker();
+    }
+
+    /// <summary>
+    /// Positions the gold reference segment at the active reference note's vertical position (a
+    /// central horizontal band), or hides it when no reference note is active. Vertical mapping:
+    /// normalised 0 = bottom, 1 = top, so pixel Y = (1 - normalised) * height.
+    /// </summary>
+    private void UpdateReferenceLine()
+    {
+        double height = PitchCanvas.ActualHeight;
+        double width = PitchCanvas.ActualWidth;
+        if (height <= 0 || width <= 0)
+        {
+            return;
+        }
+
+        if (!ViewModel.HasReferenceNote)
+        {
+            ReferenceLine.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // A central band: 60% of the width, centred horizontally.
+        double bandWidth = width * 0.6;
+        double bandLeft = (width - bandWidth) / 2.0;
+        ReferenceLine.Width = bandWidth;
+
+        double y = (1.0 - Clamp01(ViewModel.ReferenceNormalized)) * height;
+        // Centre the 6px-tall segment on its pitch line.
+        Canvas.SetLeft(ReferenceLine, bandLeft);
+        Canvas.SetTop(ReferenceLine, y - (ReferenceLine.Height / 2.0));
+        ReferenceLine.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Positions the sung-pitch marker at the detected note's vertical position, centred horizontally;
+    /// hides it when the latest hop was unvoiced.
+    /// </summary>
+    private void UpdateSungMarker()
+    {
+        double height = PitchCanvas.ActualHeight;
+        double width = PitchCanvas.ActualWidth;
+        if (height <= 0 || width <= 0)
+        {
+            return;
+        }
+
+        if (!ViewModel.IsSungVoiced)
+        {
+            SungMarker.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        double y = (1.0 - Clamp01(ViewModel.SungNormalized)) * height;
+        double x = width / 2.0;
+        Canvas.SetLeft(SungMarker, x - (SungMarker.Width / 2.0));
+        Canvas.SetTop(SungMarker, y - (SungMarker.Height / 2.0));
+        SungMarker.Visibility = Visibility.Visible;
+    }
+
+    private static double Clamp01(double value)
+    {
+        if (double.IsNaN(value))
+        {
+            return 0.0;
+        }
+
+        return Math.Clamp(value, 0.0, 1.0);
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs args)

@@ -6,6 +6,7 @@ using NAudio.Wave;
 using Saikara.Core.Audio;
 using Saikara.Core.Lyrics;
 using Saikara.Core.Midi;
+using Saikara.Core.Scoring;
 
 // 'PlaybackState' exists in both Saikara.Core.Audio and NAudio.Wave; alias the Core one
 // (the IAudioEngine contract type) so unqualified references resolve unambiguously.
@@ -45,7 +46,7 @@ namespace Saikara.App.Audio;
 /// audio device is opened. This keeps the app usable when the first-run download failed.
 /// </para>
 /// </remarks>
-public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
+public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferenceSource
 {
     /// <summary>Output sample rate. 44.1 kHz stereo is universally supported by shared-mode WASAPI.</summary>
     private const int SampleRate = 44100;
@@ -62,6 +63,13 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
     /// never <see langword="null"/>.
     /// </summary>
     private IReadOnlyList<TelopLine> _telopLines = Array.Empty<TelopLine>();
+
+    /// <summary>
+    /// Reference-melody notes for the currently loaded sequence, derived from the key- and
+    /// tempo-transformed song so note times and pitches match both the playback clock and the
+    /// transposed backing. Rebuilt by <see cref="BuildAndLoadSequence"/>; never <see langword="null"/>.
+    /// </summary>
+    private IReadOnlyList<ReferenceNote> _referenceNotes = Array.Empty<ReferenceNote>();
 
     private readonly MeltySynth.Synthesizer? _synthesizer;
     private readonly MeltySynth.MidiFileSequencer? _sequencer;
@@ -210,6 +218,12 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
     /// <inheritdoc cref="ITelopSource.TelopChanged" />
     public event EventHandler? TelopChanged;
 
+    /// <inheritdoc cref="IReferenceSource.CurrentReferenceNotes" />
+    public IReadOnlyList<ReferenceNote> CurrentReferenceNotes => _referenceNotes;
+
+    /// <inheritdoc cref="IReferenceSource.ReferenceChanged" />
+    public event EventHandler? ReferenceChanged;
+
     /// <inheritdoc />
     public void Load(MidiSong song)
     {
@@ -355,6 +369,12 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
         // Rebuild the telop from the transformed song so syllable times line up with the clock.
         // This runs even in disabled mode so the display still shows lyrics without audio.
         RebuildTelopFrom(transformed);
+
+        // Rebuild the reference melody from the same transformed song. The key offset is already
+        // baked into `transformed`, so pass offset 0 to ReferenceMelody.FromTrack (transposing again
+        // would double-apply the key). Runs even in disabled mode so the pitch bar still shows the
+        // target line without audio.
+        RebuildReferenceFrom(transformed);
 
         if (!IsPlaybackEnabled || _sequencer is null)
         {
@@ -528,6 +548,80 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
         {
             _dispatcherQueue.TryEnqueue(() => TelopChanged?.Invoke(this, EventArgs.Empty));
         }
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="_referenceNotes"/> from the transformed song's detected melody track and
+    /// raises <see cref="ReferenceChanged"/> (on the UI thread) when the note set actually changed.
+    /// A seek leaves the reference timeline untouched, so the rebuilt notes compare equal and no
+    /// event fires; a load, key change, or tempo change produces a different set and notifies.
+    /// </summary>
+    private void RebuildReferenceFrom(MidiSong transformed)
+    {
+        // `transformed` already has the key and tempo applied, so the melody detection runs against
+        // exactly what is heard and FromTrack is called with offset 0 (no further transpose).
+        int? melodyIdx = MelodyTrackDetector.Detect(transformed);
+        IReadOnlyList<ReferenceNote> rebuilt = melodyIdx is int i
+            ? ReferenceMelody.FromTrack(transformed, i, 0)
+            : Array.Empty<ReferenceNote>();
+
+        if (ReferenceNotesEqual(_referenceNotes, rebuilt))
+        {
+            return;
+        }
+
+        _referenceNotes = rebuilt;
+        RaiseReferenceChanged();
+    }
+
+    /// <summary>
+    /// Raises <see cref="ReferenceChanged"/> on the UI thread. <see cref="BuildAndLoadSequence"/> can
+    /// run from a background thread (a key/tempo setter touched off the UI thread), so marshal to
+    /// keep the contract that the event arrives on the UI thread.
+    /// </summary>
+    private void RaiseReferenceChanged()
+    {
+        if (ReferenceChanged is null)
+        {
+            return;
+        }
+
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ReferenceChanged.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(() => ReferenceChanged?.Invoke(this, EventArgs.Empty));
+        }
+    }
+
+    /// <summary>
+    /// Cheap structural comparison of two reference-note sets: equal when they have the same count
+    /// and each pair agrees on start time, end time and MIDI note. Suppresses redundant
+    /// <see cref="ReferenceChanged"/> events on seeks (which don't touch the melody timeline).
+    /// </summary>
+    private static bool ReferenceNotesEqual(IReadOnlyList<ReferenceNote> a, IReadOnlyList<ReferenceNote> b)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i].Start != b[i].Start || a[i].End != b[i].End || a[i].MidiNote != b[i].MidiNote)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

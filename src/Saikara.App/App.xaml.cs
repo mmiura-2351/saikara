@@ -12,6 +12,7 @@ using Saikara.App.Views;
 using Saikara.Core.Audio;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
+using Saikara.Core.Pitch;
 
 namespace Saikara.App;
 
@@ -29,6 +30,13 @@ public partial class App : Application
 
     private OperatorWindow? _operatorWindow;
     private DisplayWindow? _displayWindow;
+
+    /// <summary>
+    /// Wires mic capture to the playback transport for the app's lifetime. Held so it isn't GC'd and
+    /// so it can be disposed; created in <see cref="InitializeAudioEngineAsync"/> once both the engine
+    /// and the pitch monitor exist.
+    /// </summary>
+    private PitchMonitorTransportLink? _pitchTransportLink;
 
     public App()
     {
@@ -71,8 +79,10 @@ public partial class App : Application
     /// Ensures the default SoundFont is on disk and constructs the singleton
     /// <see cref="IAudioEngine"/> using the current (UI) thread's <see cref="DispatcherQueue"/>.
     /// Any download failure is swallowed: the engine is still created (disabled) so the UI opens.
+    /// Then builds the singleton <see cref="IPitchMonitor"/> (P3) against the engine and links it to
+    /// the playback transport so mic capture follows play/pause/stop.
     /// </summary>
-    private static async System.Threading.Tasks.Task InitializeAudioEngineAsync()
+    private async System.Threading.Tasks.Task InitializeAudioEngineAsync()
     {
         var installer = GetService<SoundFontInstaller>();
 
@@ -86,8 +96,19 @@ public partial class App : Application
             // file and constructs disabled; the operator UI surfaces "playback unavailable".
         }
 
+        var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+
         var holder = GetService<AudioEngineHolder>();
-        holder.Initialize(installer.DefaultSoundFontPath, DispatcherQueue.GetForCurrentThread());
+        holder.Initialize(installer.DefaultSoundFontPath, dispatcherQueue);
+
+        // P3: build the pitch monitor against the now-constructed engine, then wire it to the
+        // transport. The monitor opens no device until playback starts (and degrades gracefully if
+        // there is no microphone), so this never blocks startup.
+        var engine = GetService<IAudioEngine>();
+        var monitorHolder = GetService<PitchMonitorHolder>();
+        monitorHolder.Initialize(engine, dispatcherQueue);
+
+        _pitchTransportLink = new PitchMonitorTransportLink(engine, monitorHolder.Monitor, dispatcherQueue);
     }
 
     private static IHost BuildHost()
@@ -121,14 +142,24 @@ public partial class App : Application
         services.AddSingleton<AudioEngineHolder>();
         services.AddSingleton<IAudioEngine>(sp => sp.GetRequiredService<AudioEngineHolder>().Engine);
 
+        // P3 mic & pitch (REQUIREMENTS §6). The Core pitch detector is platform-agnostic and built
+        // eagerly. The PitchMonitor (WASAPI mic capture -> detector -> live result + PitchSample
+        // accumulator) is a singleton that, like the engine, needs the UI DispatcherQueue and the
+        // constructed engine, so it resolves through a holder initialised in OnLaunched.
+        services.AddSingleton<IPitchDetector, McLeodPitchDetector>();
+        services.AddSingleton<PitchMonitorHolder>();
+        services.AddSingleton<IPitchMonitor>(sp => sp.GetRequiredService<PitchMonitorHolder>().Monitor);
+
         // View-models. Transient so each window instance gets its own state.
         services.AddTransient<OperatorViewModel>();
 
-        // DisplayViewModel needs the UI DispatcherQueue for its ~30 fps telop frame timer. It is
-        // resolved in OnLaunched on the UI thread, so capturing the current thread's queue here is
-        // correct (the engine's PositionChanged is marshaled to this same thread).
+        // DisplayViewModel needs the UI DispatcherQueue for its ~30 fps telop/pitch-bar frame timer,
+        // and the pitch monitor for the live sung pitch. It is resolved in OnLaunched on the UI
+        // thread, so capturing the current thread's queue here is correct (the engine's
+        // PositionChanged and the monitor's PitchDetected are marshaled to this same thread).
         services.AddTransient(sp => new DisplayViewModel(
             sp.GetRequiredService<IAudioEngine>(),
+            sp.GetRequiredService<IPitchMonitor>(),
             DispatcherQueue.GetForCurrentThread()));
 
         // Windows. Transient: a window is consumed once at launch.
