@@ -339,6 +339,10 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
 
         lock (_renderLock)
         {
+            // Reset the synthesizer before swapping the sequence (key/tempo change or seek):
+            // any voice still sounding from the previous sequence has no matching NoteOff in
+            // the new event stream, so without this it hangs as a continuous tone (a "beep").
+            _synthesizer!.Reset();
             _sequencer!.Play(midiFile, loop: false);
 
             // Fast-forward: render and discard audio up to the seek/rebuild target. Position is
