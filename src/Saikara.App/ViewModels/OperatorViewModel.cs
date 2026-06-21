@@ -29,6 +29,7 @@ public partial class OperatorViewModel : ObservableObject
     private readonly IAudioEngine _audioEngine;
     private readonly IMidiLoader _midiLoader;
     private readonly IMidiImportService _importService;
+    private readonly INowPlaying _nowPlaying;
 
     /// <summary>
     /// Guards <see cref="PositionSeconds"/> against feedback: when the engine's
@@ -56,13 +57,15 @@ public partial class OperatorViewModel : ObservableObject
         ISongLibrary library,
         IAudioEngine audioEngine,
         IMidiLoader midiLoader,
-        IMidiImportService importService)
+        IMidiImportService importService,
+        INowPlaying nowPlaying)
     {
         _appInfo = appInfo;
         _library = library;
         _audioEngine = audioEngine;
         _midiLoader = midiLoader;
         _importService = importService;
+        _nowPlaying = nowPlaying;
 
         // Seed transport state from the engine, then follow it.
         _isPlaybackEnabled = (_audioEngine as MeltySynthAudioEngine)?.IsPlaybackEnabled ?? true;
@@ -83,11 +86,17 @@ public partial class OperatorViewModel : ObservableObject
 
     /// <summary>
     /// The library <see cref="Song"/> currently loaded into the engine, or <see langword="null"/>
-    /// for an ad-hoc "Open MIDI file…" load. Later phases (P5 score &amp; history persistence)
-    /// attach the score to this song; a null value means the loaded MIDI is not a library entry.
+    /// for an ad-hoc "Open MIDI file…" load. The authoritative copy lives in the shared
+    /// <see cref="INowPlaying"/> service; this observable property mirrors it for the operator UI
+    /// and forwards every change into the service (see <see cref="OnCurrentSongChanged"/>) so the
+    /// display window attaches the end-of-song score to the right entry (P5). A null value means
+    /// the loaded MIDI is not a library entry.
     /// </summary>
     [ObservableProperty]
     private Song? _currentSong;
+
+    /// <summary>Forwards the loaded song into the shared <see cref="INowPlaying"/> state.</summary>
+    partial void OnCurrentSongChanged(Song? value) => _nowPlaying.CurrentSong = value;
 
     /// <summary>Message shown in the import-status <c>InfoBar</c> after an import attempt.</summary>
     [ObservableProperty]

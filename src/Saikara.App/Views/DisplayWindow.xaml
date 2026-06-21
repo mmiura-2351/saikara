@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:Saikara.App.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:Saikara.App.ViewModels"
     mc:Ignorable="d">
 
     <!-- Background placeholder: a static gradient (REQUIREMENTS §5 — static image /
@@ -340,6 +341,73 @@
                                 TextAlignment="Center" />
                         </StackPanel>
                     </StackPanel>
+
+                    <!-- Score history (P5): personal best + a few recent scores for this song.
+                         Populated after the fresh score is saved (so the best already reflects this
+                         run). Hidden for an ad-hoc opened file or a song with no number/history.
+                         Fixed bright palette on the dark scrim — deliberately NOT themed. -->
+                    <Border
+                        Padding="20,16"
+                        Background="#1AFFFFFF"
+                        BorderBrush="#22FFFFFF"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Visibility="{x:Bind local:DisplayWindow.AnyHistoryVisibility(ViewModel.HasBestScore, ViewModel.HasRecentScores), Mode=OneWay}">
+                        <StackPanel Spacing="12">
+                            <TextBlock
+                                AutomationProperties.AutomationId="DisplayResultBest"
+                                FontSize="22"
+                                FontWeight="SemiBold"
+                                Foreground="#FFFFD54A"
+                                Text="{x:Bind ViewModel.BestScoreText, Mode=OneWay}"
+                                TextAlignment="Center"
+                                Visibility="{x:Bind local:DisplayWindow.BoolToVisibility(ViewModel.HasBestScore), Mode=OneWay}" />
+
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="#80FFFFFF"
+                                Text="最近のスコア — Recent"
+                                TextAlignment="Center"
+                                Visibility="{x:Bind local:DisplayWindow.BoolToVisibility(ViewModel.HasRecentScores), Mode=OneWay}" />
+
+                            <ItemsControl
+                                AutomationProperties.AutomationId="DisplayResultRecentList"
+                                AutomationProperties.Name="Recent scores"
+                                ItemsSource="{x:Bind ViewModel.RecentScores, Mode=OneWay}"
+                                Visibility="{x:Bind local:DisplayWindow.BoolToVisibility(ViewModel.HasRecentScores), Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScoreHistoryItem">
+                                        <Grid Margin="0,2" ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock
+                                                Grid.Column="0"
+                                                FontSize="14"
+                                                Foreground="#B3FFFFFF"
+                                                Text="{x:Bind DateText}" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                FontSize="14"
+                                                FontWeight="SemiBold"
+                                                Foreground="#FFFFFFFF"
+                                                Text="{x:Bind ScoreText}"
+                                                TextAlignment="Right" />
+                                            <TextBlock
+                                                Grid.Column="2"
+                                                MinWidth="24"
+                                                FontSize="14"
+                                                Foreground="#FF35E0FF"
+                                                Text="{x:Bind GradeText}"
+                                                TextAlignment="Right" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
 
                     <Button
                         Margin="0,8,0,0"

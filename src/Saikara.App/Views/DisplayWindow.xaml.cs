@@ -41,6 +41,14 @@ public sealed partial class DisplayWindow : Window
     public static Visibility BoolToVisibility(bool value) =>
         value ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>
+    /// x:Bind visibility helper for the score-history block (P5): visible when there is either a
+    /// personal best or a recent list to show, collapsed for an ad-hoc file with no history. A
+    /// static function keeps the binding converter-free.
+    /// </summary>
+    public static Visibility AnyHistoryVisibility(bool hasBest, bool hasRecent) =>
+        hasBest || hasRecent ? Visibility.Visible : Visibility.Collapsed;
+
     public DisplayWindow(DisplayViewModel viewModel)
     {
         ViewModel = viewModel;
