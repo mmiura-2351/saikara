@@ -29,192 +29,237 @@
                 Text="Operator console" />
         </StackPanel>
 
-        <!-- Sidebar (song-select + key/tempo) | reservation queue -->
+        <!-- Sidebar (controls) | reservation queue -->
         <Grid Grid.Row="1" Padding="24,0,24,24">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="380" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: song-select remote + key/tempo + transport. Wrapped in a ScrollViewer
-                 so the transport (incl. the seek slider) stays reachable on short windows. -->
+            <!-- Left: controls organized into card sections. Wrapped in a ScrollViewer
+                 so everything stays reachable on short windows. -->
             <ScrollViewer
                 Grid.Column="0"
                 Margin="0,0,24,0"
                 VerticalScrollBarVisibility="Auto"
                 VerticalScrollMode="Auto">
-                <StackPanel Spacing="16">
+                <StackPanel Spacing="12">
 
-                <TextBlock
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Song select" />
-
-                <AutoSuggestBox
-                    AutomationProperties.AutomationId="OperatorSearchBox"
-                    PlaceholderText="Number, title or artist"
-                    QueryIcon="Find"
-                    QuerySubmitted="OnSearchQuerySubmitted"
-                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                    TextChanged="OnSearchTextChanged" />
-
-                <ListView
-                    Height="280"
-                    AutomationProperties.AutomationId="OperatorSearchResultsList"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                <!-- ============================================================
+                     Now Playing card (再生コントロール)
+                     ============================================================ -->
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1"
-                    CornerRadius="{StaticResource ControlCornerRadius}"
-                    DoubleTapped="OnSearchResultDoubleTapped"
-                    ItemsSource="{x:Bind ViewModel.SearchResults}"
-                    SelectedItem="{x:Bind ViewModel.SelectedSong, Mode=TwoWay}">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="core:Song">
-                            <StackPanel Padding="0,4" Spacing="2">
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Padding="16">
+                    <StackPanel Spacing="12">
+                        <!-- Section header -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                FontSize="20"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xEA37;" />
+                            <StackPanel Spacing="0">
                                 <TextBlock
                                     Style="{StaticResource BodyStrongTextBlockStyle}"
-                                    Text="{x:Bind Title}" />
+                                    Text="再生コントロール" />
                                 <TextBlock
                                     Style="{StaticResource CaptionTextBlockStyle}"
                                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="{x:Bind Artist}" />
-                                <TextBlock
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                    Text="{x:Bind Number}" />
+                                    Text="Now Playing" />
                             </StackPanel>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
+                        </StackPanel>
 
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button
-                        Grid.Column="0"
-                        AutomationProperties.AutomationId="OperatorPlaySelectedButton"
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.PlaySelectedCommand}"
-                        Content="Play selected"
-                        Style="{StaticResource AccentButtonStyle}" />
-                    <Button
-                        Grid.Column="1"
-                        AutomationProperties.AutomationId="OperatorAddToQueueButton"
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.AddToQueueCommand}"
-                        Content="Add to queue" />
-                </Grid>
+                        <!-- Loaded file name -->
+                        <TextBlock
+                            AutomationProperties.AutomationId="OperatorLoadedFileText"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
 
-                <!-- Library import (P7): MIDI/KAR from a local file or a URL. -->
-                <TextBlock
-                    Margin="0,8,0,0"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Add to library" />
+                        <InfoBar
+                            AutomationProperties.AutomationId="OperatorPlaybackUnavailableInfoBar"
+                            IsClosable="False"
+                            IsOpen="{x:Bind local:OperatorWindow.Not(ViewModel.IsPlaybackEnabled), Mode=OneWay}"
+                            Message="Playback is unavailable — the SoundFont could not be loaded."
+                            Severity="Warning" />
 
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button
-                        Grid.Column="0"
-                        AutomationProperties.AutomationId="OperatorAddToLibraryButton"
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.ImportFromFileCommand}"
-                        Content="Add to library…" />
-                    <Button
-                        Grid.Column="1"
-                        AutomationProperties.AutomationId="OperatorImportFromUrlButton"
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.ImportFromUrlCommand}"
-                        Content="Import from URL…" />
-                </Grid>
+                        <!-- Play / Pause / Stop buttons -->
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Grid.Column="0"
+                                AutomationProperties.AutomationId="OperatorPlayButton"
+                                AutomationProperties.Name="Play"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.PlayCommand}"
+                                IsEnabled="{x:Bind local:OperatorWindow.CanPlay(ViewModel.IsSongLoaded, ViewModel.IsPlaybackEnabled, ViewModel.PlaybackState), Mode=OneWay}"
+                                Style="{StaticResource AccentButtonStyle}">
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE768;" />
+                            </Button>
+                            <Button
+                                Grid.Column="1"
+                                AutomationProperties.AutomationId="OperatorPauseButton"
+                                AutomationProperties.Name="Pause"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.PauseCommand}"
+                                IsEnabled="{x:Bind local:OperatorWindow.CanPause(ViewModel.PlaybackState), Mode=OneWay}">
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE769;" />
+                            </Button>
+                            <Button
+                                Grid.Column="2"
+                                AutomationProperties.AutomationId="OperatorStopButton"
+                                AutomationProperties.Name="Stop"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.StopCommand}"
+                                IsEnabled="{x:Bind local:OperatorWindow.CanStop(ViewModel.IsSongLoaded, ViewModel.PlaybackState), Mode=OneWay}">
+                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE71A;" />
+                            </Button>
+                        </Grid>
 
-                <TextBlock
-                    AutomationProperties.AutomationId="OperatorImportHelpText"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="MIDI/KAR files only (.mid, .midi, .kar)." />
+                        <!-- Seek slider + time labels -->
+                        <Slider
+                            AutomationProperties.AutomationId="OperatorSeekSlider"
+                            AutomationProperties.Name="Seek"
+                            IsEnabled="{x:Bind ViewModel.IsSongLoaded, Mode=OneWay}"
+                            Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
+                            Minimum="0"
+                            StepFrequency="1"
+                            Value="{x:Bind ViewModel.PositionSeconds, Mode=TwoWay}" />
 
-                <InfoBar
-                    AutomationProperties.AutomationId="OperatorImportInfoBar"
-                    IsOpen="{x:Bind ViewModel.IsImportInfoOpen, Mode=TwoWay}"
-                    Message="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
-                    Severity="{x:Bind ViewModel.ImportSeverity, Mode=OneWay}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Grid.Column="0"
+                                AutomationProperties.AutomationId="OperatorElapsedText"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind ViewModel.ElapsedText, Mode=OneWay}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                AutomationProperties.AutomationId="OperatorTotalText"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind ViewModel.TotalText, Mode=OneWay}" />
+                        </Grid>
 
-                <TextBlock
-                    Margin="0,8,0,0"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Key &amp; tempo" />
-
-                <Grid ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock
-                        Grid.Column="0"
-                        VerticalAlignment="Center"
-                        Text="{x:Bind local:OperatorWindow.FormatKey(ViewModel.KeyOffset), Mode=OneWay}" />
-                    <Button
-                        Grid.Column="1"
-                        AutomationProperties.AutomationId="OperatorKeyDownButton"
-                        AutomationProperties.Name="Key down"
-                        Command="{x:Bind ViewModel.KeyDownCommand}"
-                        Content="&#x2212;" />
-                    <Button
-                        Grid.Column="2"
-                        AutomationProperties.AutomationId="OperatorKeyUpButton"
-                        AutomationProperties.Name="Key up"
-                        Command="{x:Bind ViewModel.KeyUpCommand}"
-                        Content="&#x2B;" />
-                </Grid>
-
-                <NumberBox
-                    AutomationProperties.AutomationId="OperatorTempoNumberBox"
-                    Header="Tempo (%)"
-                    Maximum="200"
-                    Minimum="50"
-                    SpinButtonPlacementMode="Inline"
-                    Value="{x:Bind ViewModel.TempoPercent, Mode=TwoWay}" />
-
-                <ToggleSwitch
-                    AutomationProperties.AutomationId="OperatorGuideMelodyToggle"
-                    Header="Guide melody"
-                    IsOn="{x:Bind ViewModel.IsGuideMelodyEnabled, Mode=TwoWay}"
-                    OffContent="Off"
-                    OnContent="On" />
-
-                <!-- P6: Song settings / correction editor. Shown only when a numbered library
-                     song is loaded. Lets the operator override the melody track and adjust lyric
-                     timing. Wrapped in an Expander so it does not crowd the default view. -->
-                <Expander
-                    AutomationProperties.AutomationId="OperatorSongSettingsExpander"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Stretch"
-                    Header="Song settings"
-                    IsExpanded="False"
-                    Visibility="{x:Bind local:OperatorWindow.BoolToVisibility(ViewModel.IsCorrectionEditorVisible), Mode=OneWay}">
-                    <StackPanel Spacing="12">
-                        <ComboBox
-                            AutomationProperties.AutomationId="OperatorMelodyTrackComboBox"
-                            Header="Melody track"
-                            HorizontalAlignment="Stretch"
-                            ItemsSource="{x:Bind ViewModel.TrackNames}"
-                            PlaceholderText="(auto-detect)"
-                            SelectedIndex="{x:Bind ViewModel.SelectedMelodyTrackIndex, Mode=TwoWay}" />
+                        <!-- Key / Tempo / Guide melody -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Grid.Column="0"
+                                VerticalAlignment="Center"
+                                Text="{x:Bind local:OperatorWindow.FormatKeyLabel(ViewModel.KeyOffset), Mode=OneWay}" />
+                            <Button
+                                Grid.Column="1"
+                                AutomationProperties.AutomationId="OperatorKeyDownButton"
+                                AutomationProperties.Name="Key down"
+                                Command="{x:Bind ViewModel.KeyDownCommand}"
+                                Content="&#x2212;" />
+                            <Button
+                                Grid.Column="2"
+                                AutomationProperties.AutomationId="OperatorKeyUpButton"
+                                AutomationProperties.Name="Key up"
+                                Command="{x:Bind ViewModel.KeyUpCommand}"
+                                Content="&#x2B;" />
+                        </Grid>
 
                         <NumberBox
-                            AutomationProperties.AutomationId="OperatorLyricOffsetNumberBox"
-                            Header="Lyric offset (ms)"
-                            LargeChange="100"
-                            Maximum="2000"
-                            Minimum="-2000"
-                            SmallChange="10"
+                            AutomationProperties.AutomationId="OperatorTempoNumberBox"
+                            Header="テンポ Tempo (%)"
+                            Maximum="200"
+                            Minimum="50"
                             SpinButtonPlacementMode="Inline"
-                            Value="{x:Bind ViewModel.LyricOffsetMs, Mode=TwoWay}" />
+                            Value="{x:Bind ViewModel.TempoPercent, Mode=TwoWay}" />
+
+                        <ToggleSwitch
+                            AutomationProperties.AutomationId="OperatorGuideMelodyToggle"
+                            Header="ガイドメロディ"
+                            IsOn="{x:Bind ViewModel.IsGuideMelodyEnabled, Mode=TwoWay}"
+                            OffContent="Off"
+                            OnContent="On" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ============================================================
+                     Song Library card (曲ライブラリ)
+                     ============================================================ -->
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Padding="16">
+                    <StackPanel Spacing="12">
+                        <!-- Section header -->
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                FontSize="20"
+                                Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                Glyph="&#xE8B7;" />
+                            <StackPanel Spacing="0">
+                                <TextBlock
+                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                    Text="曲ライブラリ" />
+                                <TextBlock
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Song Library" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <AutoSuggestBox
+                            AutomationProperties.AutomationId="OperatorSearchBox"
+                            PlaceholderText="Number, title or artist"
+                            QueryIcon="Find"
+                            QuerySubmitted="OnSearchQuerySubmitted"
+                            Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            TextChanged="OnSearchTextChanged" />
+
+                        <ListView
+                            Height="240"
+                            AutomationProperties.AutomationId="OperatorSearchResultsList"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource ControlCornerRadius}"
+                            DoubleTapped="OnSearchResultDoubleTapped"
+                            ItemsSource="{x:Bind ViewModel.SearchResults}"
+                            SelectedItem="{x:Bind ViewModel.SelectedSong, Mode=TwoWay}">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="core:Song">
+                                    <StackPanel Padding="0,4" Spacing="2">
+                                        <TextBlock
+                                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                                            Text="{x:Bind Title}" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind Artist}" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Text="{x:Bind Number}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
 
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
@@ -223,200 +268,295 @@
                             </Grid.ColumnDefinitions>
                             <Button
                                 Grid.Column="0"
-                                AutomationProperties.AutomationId="OperatorSaveCorrectionsButton"
+                                AutomationProperties.AutomationId="OperatorPlaySelectedButton"
                                 HorizontalAlignment="Stretch"
-                                Command="{x:Bind ViewModel.SaveCorrectionsCommand}"
-                                Content="Save"
+                                Command="{x:Bind ViewModel.PlaySelectedCommand}"
+                                Content="Play selected"
                                 Style="{StaticResource AccentButtonStyle}" />
                             <Button
                                 Grid.Column="1"
-                                AutomationProperties.AutomationId="OperatorResetCorrectionsButton"
+                                AutomationProperties.AutomationId="OperatorAddToQueueButton"
                                 HorizontalAlignment="Stretch"
-                                Command="{x:Bind ViewModel.ResetCorrectionsCommand}"
-                                Content="Reset" />
+                                Command="{x:Bind ViewModel.AddToQueueCommand}"
+                                Content="Add to queue" />
                         </Grid>
                     </StackPanel>
-                </Expander>
+                </Border>
 
-                <!-- Playback transport (P1) -->
-                <TextBlock
-                    Margin="0,8,0,0"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Playback" />
+                <!-- ============================================================
+                     Import card (曲を追加) — collapsed Expander
+                     ============================================================ -->
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Padding="16">
+                    <Expander
+                        AutomationProperties.AutomationId="OperatorImportExpander"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        IsExpanded="False">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon
+                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                    FontSize="16"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="&#xE710;" />
+                                <StackPanel Spacing="0">
+                                    <TextBlock
+                                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                                        Text="曲を追加" />
+                                    <TextBlock
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="Import" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Spacing="12">
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button
+                                    Grid.Column="0"
+                                    AutomationProperties.AutomationId="OperatorAddToLibraryButton"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.ImportFromFileCommand}"
+                                    Content="Add to library…" />
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="OperatorImportFromUrlButton"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.ImportFromUrlCommand}"
+                                    Content="Import from URL…" />
+                            </Grid>
 
-                <Button
-                    AutomationProperties.AutomationId="OperatorOpenFileButton"
-                    HorizontalAlignment="Stretch"
-                    Command="{x:Bind ViewModel.OpenFileCommand}"
-                    Content="Open MIDI file…" />
+                            <TextBlock
+                                AutomationProperties.AutomationId="OperatorImportHelpText"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="MIDI/KAR files only (.mid, .midi, .kar)." />
 
-                <TextBlock
-                    AutomationProperties.AutomationId="OperatorLoadedFileText"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="{x:Bind ViewModel.LoadedFileName, Mode=OneWay}"
-                    TextTrimming="CharacterEllipsis" />
+                            <Button
+                                AutomationProperties.AutomationId="OperatorOpenFileButton"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.OpenFileCommand}"
+                                Content="Open MIDI file…" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
 
+                <!-- Import status InfoBar (outside the Expander card so it is always visible) -->
                 <InfoBar
-                    AutomationProperties.AutomationId="OperatorPlaybackUnavailableInfoBar"
-                    IsClosable="False"
-                    IsOpen="{x:Bind local:OperatorWindow.Not(ViewModel.IsPlaybackEnabled), Mode=OneWay}"
-                    Message="Playback is unavailable — the SoundFont could not be loaded."
-                    Severity="Warning" />
+                    AutomationProperties.AutomationId="OperatorImportInfoBar"
+                    IsOpen="{x:Bind ViewModel.IsImportInfoOpen, Mode=TwoWay}"
+                    Message="{x:Bind ViewModel.ImportMessage, Mode=OneWay}"
+                    Severity="{x:Bind ViewModel.ImportSeverity, Mode=OneWay}" />
 
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Button
-                        Grid.Column="0"
-                        AutomationProperties.AutomationId="OperatorPlayButton"
-                        AutomationProperties.Name="Play"
+                <!-- ============================================================
+                     Song Settings card (曲設定) — Expander, shown for library songs
+                     ============================================================ -->
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Padding="16"
+                    Visibility="{x:Bind local:OperatorWindow.BoolToVisibility(ViewModel.IsCorrectionEditorVisible), Mode=OneWay}">
+                    <Expander
+                        AutomationProperties.AutomationId="OperatorSongSettingsExpander"
                         HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.PlayCommand}"
-                        IsEnabled="{x:Bind local:OperatorWindow.CanPlay(ViewModel.IsSongLoaded, ViewModel.IsPlaybackEnabled, ViewModel.PlaybackState), Mode=OneWay}"
-                        Style="{StaticResource AccentButtonStyle}">
-                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE768;" />
-                    </Button>
-                    <Button
-                        Grid.Column="1"
-                        AutomationProperties.AutomationId="OperatorPauseButton"
-                        AutomationProperties.Name="Pause"
+                        HorizontalContentAlignment="Stretch"
+                        Header="曲設定 Song settings"
+                        IsExpanded="False">
+                        <StackPanel Spacing="12">
+                            <ComboBox
+                                AutomationProperties.AutomationId="OperatorMelodyTrackComboBox"
+                                Header="Melody track"
+                                HorizontalAlignment="Stretch"
+                                ItemsSource="{x:Bind ViewModel.TrackNames}"
+                                PlaceholderText="(auto-detect)"
+                                SelectedIndex="{x:Bind ViewModel.SelectedMelodyTrackIndex, Mode=TwoWay}" />
+
+                            <NumberBox
+                                AutomationProperties.AutomationId="OperatorLyricOffsetNumberBox"
+                                Header="Lyric offset (ms)"
+                                LargeChange="100"
+                                Maximum="2000"
+                                Minimum="-2000"
+                                SmallChange="10"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.LyricOffsetMs, Mode=TwoWay}" />
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button
+                                    Grid.Column="0"
+                                    AutomationProperties.AutomationId="OperatorSaveCorrectionsButton"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.SaveCorrectionsCommand}"
+                                    Content="Save"
+                                    Style="{StaticResource AccentButtonStyle}" />
+                                <Button
+                                    Grid.Column="1"
+                                    AutomationProperties.AutomationId="OperatorResetCorrectionsButton"
+                                    HorizontalAlignment="Stretch"
+                                    Command="{x:Bind ViewModel.ResetCorrectionsCommand}"
+                                    Content="Reset" />
+                            </Grid>
+                        </StackPanel>
+                    </Expander>
+                </Border>
+
+                <!-- ============================================================
+                     Settings card (設定) — Expander
+                     ============================================================ -->
+                <Border
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Padding="16">
+                    <Expander
+                        AutomationProperties.AutomationId="OperatorSettingsExpander"
                         HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.PauseCommand}"
-                        IsEnabled="{x:Bind local:OperatorWindow.CanPause(ViewModel.PlaybackState), Mode=OneWay}">
-                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE769;" />
-                    </Button>
-                    <Button
-                        Grid.Column="2"
-                        AutomationProperties.AutomationId="OperatorStopButton"
-                        AutomationProperties.Name="Stop"
-                        HorizontalAlignment="Stretch"
-                        Command="{x:Bind ViewModel.StopCommand}"
-                        IsEnabled="{x:Bind local:OperatorWindow.CanStop(ViewModel.IsSongLoaded, ViewModel.PlaybackState), Mode=OneWay}">
-                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE71A;" />
-                    </Button>
-                </Grid>
+                        HorizontalContentAlignment="Stretch"
+                        Header="設定 Settings"
+                        IsExpanded="False">
+                        <StackPanel Spacing="12">
+                            <NumberBox
+                                AutomationProperties.AutomationId="OperatorLatencyOffsetNumberBox"
+                                Header="Latency offset (ms)"
+                                LargeChange="50"
+                                Maximum="500"
+                                Minimum="0"
+                                SmallChange="10"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.LatencyOffsetMs, Mode=TwoWay}" />
 
-                <Slider
-                    AutomationProperties.AutomationId="OperatorSeekSlider"
-                    AutomationProperties.Name="Seek"
-                    IsEnabled="{x:Bind ViewModel.IsSongLoaded, Mode=OneWay}"
-                    Maximum="{x:Bind ViewModel.DurationSeconds, Mode=OneWay}"
-                    Minimum="0"
-                    StepFrequency="1"
-                    Value="{x:Bind ViewModel.PositionSeconds, Mode=TwoWay}" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Compensates mic-to-playback latency for scoring accuracy."
+                                TextWrapping="Wrap" />
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock
-                        Grid.Column="0"
-                        AutomationProperties.AutomationId="OperatorElapsedText"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{x:Bind ViewModel.ElapsedText, Mode=OneWay}" />
-                    <TextBlock
-                        Grid.Column="1"
-                        AutomationProperties.AutomationId="OperatorTotalText"
-                        Style="{StaticResource CaptionTextBlockStyle}"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="{x:Bind ViewModel.TotalText, Mode=OneWay}" />
-                </Grid>
+                            <TextBlock
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="SoundFont" />
 
-                <!-- P8: Settings section -->
-                <Expander
-                    AutomationProperties.AutomationId="OperatorSettingsExpander"
-                    Margin="0,8,0,0"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Stretch"
-                    Header="Settings"
-                    IsExpanded="False">
-                    <StackPanel Spacing="12">
-                        <NumberBox
-                            AutomationProperties.AutomationId="OperatorLatencyOffsetNumberBox"
-                            Header="Latency offset (ms)"
-                            LargeChange="50"
-                            Maximum="500"
-                            Minimum="0"
-                            SmallChange="10"
-                            SpinButtonPlacementMode="Inline"
-                            Value="{x:Bind ViewModel.LatencyOffsetMs, Mode=TwoWay}" />
+                            <TextBlock
+                                AutomationProperties.AutomationId="OperatorSoundFontPathText"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                Text="{x:Bind ViewModel.SoundFontPath, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Expander>
+                </Border>
 
-                        <TextBlock
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="Compensates mic-to-playback latency for scoring accuracy."
-                            TextWrapping="Wrap" />
-
-                        <TextBlock
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            Text="SoundFont" />
-
-                        <TextBlock
-                            AutomationProperties.AutomationId="OperatorSoundFontPathText"
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            IsTextSelectionEnabled="True"
-                            Text="{x:Bind ViewModel.SoundFontPath, Mode=OneWay}"
-                            TextTrimming="CharacterEllipsis"
-                            TextWrapping="Wrap" />
-                    </StackPanel>
-                </Expander>
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Right: reservation queue -->
+            <!-- Right: reservation queue (予約キュー) -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock
+                <StackPanel
                     Grid.Row="0"
                     Margin="0,0,0,12"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Reservation queue" />
+                    Spacing="0">
+                    <TextBlock
+                        Style="{StaticResource SubtitleTextBlockStyle}"
+                        Text="予約キュー" />
+                    <TextBlock
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Reservation queue" />
+                </StackPanel>
 
-                <ListView
-                    Grid.Row="1"
-                    AutomationProperties.AutomationId="OperatorReservationList"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource ControlCornerRadius}"
-                    ItemsSource="{x:Bind ViewModel.ReservationQueue}">
-                    <ListView.ItemTemplate>
-                        <DataTemplate x:DataType="core:Song">
-                            <Grid Padding="0,4" ColumnSpacing="12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Spacing="2">
+                <!-- Queue list with empty-state placeholder -->
+                <Grid Grid.Row="1">
+                    <!-- Empty-state placeholder (shown when queue has zero items) -->
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                        Text="キューは空です"
+                        Visibility="{x:Bind local:OperatorWindow.InvertBoolToVisibility(ViewModel.HasQueueItems), Mode=OneWay}" />
+
+                    <ListView
+                        AutomationProperties.AutomationId="OperatorReservationList"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        ContainerContentChanging="OnQueueContainerContentChanging"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
+                        ItemsSource="{x:Bind ViewModel.ReservationQueue}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="core:Song">
+                                <Grid Padding="0,4" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <!-- Queue position number (set from ContainerContentChanging) -->
                                     <TextBlock
+                                        x:Name="QueuePositionText"
+                                        Grid.Column="0"
+                                        MinWidth="24"
+                                        VerticalAlignment="Center"
+                                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                         Style="{StaticResource BodyStrongTextBlockStyle}"
-                                        Text="{x:Bind Title}" />
+                                        TextAlignment="Center" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock
+                                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                                            Text="{x:Bind Title}" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Text="{x:Bind Artist}" />
+                                    </StackPanel>
                                     <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
                                         Style="{StaticResource CaptionTextBlockStyle}"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                        Text="{x:Bind Artist}" />
-                                </StackPanel>
-                                <TextBlock
-                                    Grid.Column="1"
-                                    VerticalAlignment="Center"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                    Text="{x:Bind Number}" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
+                                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                        Text="{x:Bind Number}" />
+                                    <Button
+                                        Grid.Column="3"
+                                        AutomationProperties.AutomationId="OperatorRemoveFromQueueButton"
+                                        AutomationProperties.Name="Remove from queue"
+                                        Padding="6"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Click="OnRemoveFromQueueClick"
+                                        Tag="{x:Bind}">
+                                        <FontIcon
+                                            FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                            FontSize="12"
+                                            Glyph="&#xE74D;" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
             </Grid>
         </Grid>
     </Grid>
