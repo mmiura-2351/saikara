@@ -10,7 +10,9 @@ Tracked in detail as GitHub issues/milestones.
 - [x] Docs (requirements / architecture / roadmap) + CLAUDE.md.
 - [x] `Saikara.App` WinUI 3 skeleton: operator window + display window, MVVM, DI host.
       (Built green on Windows CI; reviewed with `winui:winui-code-review`. PR #11.)
-- [ ] SQLite wiring + dual-monitor display output.
+- [x] SQLite-backed song library in Core (`ISongLibrary` / `SqliteSongLibrary`, 15 tests). PR #12.
+- [ ] App wiring: DI-register `ISongLibrary` + init at startup; operator search uses it;
+      dual-monitor display placement.
 
 ## P1 — MIDI playback (SoundFont)
 - [ ] MIDI model + load (DryWetMIDI) in Core; KAR/XF aware.
