@@ -5,6 +5,10 @@ using NAudio.Wave;
 using Saikara.Core.Audio;
 using Saikara.Core.Midi;
 
+// 'PlaybackState' exists in both Saikara.Core.Audio and NAudio.Wave; alias the Core one
+// (the IAudioEngine contract type) so unqualified references resolve unambiguously.
+using PlaybackState = Saikara.Core.Audio.PlaybackState;
+
 namespace Saikara.App.Audio;
 
 /// <summary>
