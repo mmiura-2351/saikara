@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.UI.Dispatching;
 using NAudio.Wave;
 using Saikara.Core.Audio;
+using Saikara.Core.Lyrics;
 using Saikara.Core.Midi;
 
 // 'PlaybackState' exists in both Saikara.Core.Audio and NAudio.Wave; alias the Core one
@@ -43,7 +45,7 @@ namespace Saikara.App.Audio;
 /// audio device is opened. This keeps the app usable when the first-run download failed.
 /// </para>
 /// </remarks>
-public sealed class MeltySynthAudioEngine : IAudioEngine
+public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource
 {
     /// <summary>Output sample rate. 44.1 kHz stereo is universally supported by shared-mode WASAPI.</summary>
     private const int SampleRate = 44100;
@@ -52,6 +54,14 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
     private readonly DispatcherQueue _dispatcherQueue;
     private readonly DispatcherQueueTimer? _positionTimer;
     private readonly MidiSerializer _serializer = new();
+    private readonly LyricTelopBuilder _telopBuilder = new();
+
+    /// <summary>
+    /// Telop lines for the currently loaded sequence, built from the tempo-transformed song so
+    /// syllable start-times match the playback clock. Rebuilt by <see cref="BuildAndLoadSequence"/>;
+    /// never <see langword="null"/>.
+    /// </summary>
+    private IReadOnlyList<TelopLine> _telopLines = Array.Empty<TelopLine>();
 
     private readonly MeltySynth.Synthesizer? _synthesizer;
     private readonly MeltySynth.MidiFileSequencer? _sequencer;
@@ -193,6 +203,12 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
 
     /// <inheritdoc />
     public event EventHandler? PositionChanged;
+
+    /// <inheritdoc cref="ITelopSource.CurrentTelopLines" />
+    public IReadOnlyList<TelopLine> CurrentTelopLines => _telopLines;
+
+    /// <inheritdoc cref="ITelopSource.TelopChanged" />
+    public event EventHandler? TelopChanged;
 
     /// <inheritdoc />
     public void Load(MidiSong song)
@@ -336,6 +352,10 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
         // Duration tracks the transformed (tempo-scaled) song, as the contract requires.
         _duration = transformed.Duration;
 
+        // Rebuild the telop from the transformed song so syllable times line up with the clock.
+        // This runs even in disabled mode so the display still shows lyrics without audio.
+        RebuildTelopFrom(transformed);
+
         if (!IsPlaybackEnabled || _sequencer is null)
         {
             return;
@@ -469,6 +489,74 @@ public sealed class MeltySynthAudioEngine : IAudioEngine
     }
 
     private void RaisePositionChanged() => PositionChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Rebuilds <see cref="_telopLines"/> from the transformed song and raises
+    /// <see cref="TelopChanged"/> (on the UI thread) when the line set actually changed. Seeks and
+    /// key changes leave the lyric timeline untouched, so the rebuilt lines compare equal and no
+    /// event fires; a load or a tempo change produces a different set and notifies the view.
+    /// </summary>
+    private void RebuildTelopFrom(MidiSong transformed)
+    {
+        IReadOnlyList<TelopLine> rebuilt = _telopBuilder.Build(transformed);
+        if (TelopLinesEqual(_telopLines, rebuilt))
+        {
+            return;
+        }
+
+        _telopLines = rebuilt;
+        RaiseTelopChanged();
+    }
+
+    /// <summary>
+    /// Raises <see cref="TelopChanged"/> on the UI thread. <see cref="BuildAndLoadSequence"/> can run
+    /// from a background thread (a key/tempo setter touched off the UI thread), so marshal to keep
+    /// the contract that the event arrives on the UI thread.
+    /// </summary>
+    private void RaiseTelopChanged()
+    {
+        if (TelopChanged is null)
+        {
+            return;
+        }
+
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            TelopChanged.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(() => TelopChanged?.Invoke(this, EventArgs.Empty));
+        }
+    }
+
+    /// <summary>
+    /// Cheap structural comparison of two telop line sets: equal when they have the same number of
+    /// lines and each pair agrees on start time and text. Sufficient to suppress redundant
+    /// <see cref="TelopChanged"/> events on seeks/key changes (which don't touch the lyric timeline).
+    /// </summary>
+    private static bool TelopLinesEqual(IReadOnlyList<TelopLine> a, IReadOnlyList<TelopLine> b)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return true;
+        }
+
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (a[i].StartTime != b[i].StartTime || !string.Equals(a[i].Text, b[i].Text, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private void SetState(PlaybackState newState)
     {

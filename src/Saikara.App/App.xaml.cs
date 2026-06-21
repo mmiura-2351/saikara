@@ -123,7 +123,13 @@ public partial class App : Application
 
         // View-models. Transient so each window instance gets its own state.
         services.AddTransient<OperatorViewModel>();
-        services.AddTransient<DisplayViewModel>();
+
+        // DisplayViewModel needs the UI DispatcherQueue for its ~30 fps telop frame timer. It is
+        // resolved in OnLaunched on the UI thread, so capturing the current thread's queue here is
+        // correct (the engine's PositionChanged is marshaled to this same thread).
+        services.AddTransient(sp => new DisplayViewModel(
+            sp.GetRequiredService<IAudioEngine>(),
+            DispatcherQueue.GetForCurrentThread()));
 
         // Windows. Transient: a window is consumed once at launch.
         services.AddTransient<OperatorWindow>();
