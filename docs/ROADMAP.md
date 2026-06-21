@@ -23,6 +23,11 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 - [ ] SoundFont synthesis (MeltySynth) + NAudio output behind a Core audio abstraction.
       (SoundFont asset: user-specified `.sf2` + optional first-run download of a free
       default; large binaries are git-ignored, not committed.)
+      - [x] Core abstraction + assets: `IAudioEngine` (transport + key/tempo) interface,
+            `SoundFontInstaller` (atomic first-run download), `MidiSerializer` (re-emit a
+            transformed `MidiSong` as SMF for the synth). 23 tests. (Linux-testable part.)
+      - [ ] App: `MeltySynthAudioEngine : IAudioEngine` (MeltySynth + NAudio/WASAPI),
+            driven from the serialized transformed song. (Windows.)
 - [ ] Transport (play/pause/seek) wiring; expose `MidiTransforms` key/tempo in the operator UI.
 
 ## P2 — Lyric telop
