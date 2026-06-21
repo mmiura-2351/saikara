@@ -81,16 +81,12 @@ The owner monitors only; this project must self-sustain across a long, context-l
 
 ## Status
 
-**P0–P4 essentially complete; P1 runtime-verified by the owner. Owner is away — running
-unattended through the roadmap (build + CI-verify; runtime audio/visual/mic checks deferred to
-the owner, flagged in PRs).** `Saikara.Core` (176 tests): `MusicMath`, SQLite `ISongLibrary`,
-MIDI (`MidiSong`/`MidiLoader`/`MidiTransforms`/`MelodyTrackDetector`), audio (`IAudioEngine`,
-`SoundFontInstaller`, `MidiSerializer`), lyrics telop (`LyricTelopBuilder`/`TelopPlayback`),
-pitch (`McLeodPitchDetector`), scoring (`ScoringEngine` — DAM-style sub-scores + ornaments).
-`Saikara.App`: two-window WinUI app; operator (search, transport, key/tempo); display (color-wipe
-telop, live mic pitch bar, scoring result overlay); `MeltySynthAudioEngine` (MeltySynth + NAudio);
-`PitchMonitor` (WASAPI mic capture). PRs #11–#25. GitHub Actions publishes a self-contained runnable
-artifact.
-**Remaining:** P2 guide-melody on/off; P3 latency calibration; **P5** library/operation
-(reservation queue + score history persistence); **P6** correction editor; **P7** internet
-MIDI/KAR import; **P8** polish. Work top-down through the roadmap.
+**P0–P7 essentially complete (PRs #11–#30); P1 runtime-verified by the owner.** Core (214
+tests): `MusicMath`, SQLite `ISongLibrary`/`SqliteScoreHistory`, MIDI layer (load/transforms/
+melody-detect/MuteTrack), audio (`IAudioEngine`/`SoundFontInstaller`/`MidiSerializer`), lyrics
+(`LyricTelopBuilder`/`TelopPlayback`), pitch (`McLeodPitchDetector`), scoring (`ScoringEngine`),
+MIDI import (`MidiImportService`). App: two-window WinUI; operator (search, transport, key/tempo,
+guide-melody toggle, import file+URL); display (color-wipe telop, live mic pitch bar, scored
+result overlay + history); `MeltySynthAudioEngine`; `PitchMonitor`; `NowPlaying`.
+**Remaining (issues #8, #10):** P6 correction editor (melody track + lyric timing), P8 polish
+(background, latency calibration UI, reservation queue multi-singer, UI refinement).
