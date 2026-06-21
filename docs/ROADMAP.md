@@ -43,9 +43,10 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
 ## P3 — Mic & pitch
 - [x] Core `PitchDetector` (McLeod/MPM): `IPitchDetector`/`McLeodPitchDetector`,
       `PitchResult`. 25 tests. PR #22.
-- [ ] WASAPI mic capture (App) feeding the Core `PitchDetector`.
-- [ ] Real-time pitch bar vs reference melody on the display window.
-- [ ] Latency calibration between synthesized backing and mic.
+- [x] WASAPI mic capture (App) feeding the Core `PitchDetector` (`PitchMonitor`). PR #24.
+- [x] Real-time pitch bar vs reference melody on the display window (Canvas bar). PR #24.
+- [ ] Latency calibration between synthesized backing and mic (currently a fixed default
+      offset; auto/UI calibration still TODO).
 
 ## P4 — Scoring (basic -> full)
 - [x] Pitch-accuracy score in Core (deterministic, unit-tested).
@@ -53,8 +54,10 @@ two-window WinUI app, CI (Linux + Windows), and the autonomous-dev environment a
       *shakuri*, *kobushi* (`Saikara.Core.Scoring`: `ScoringEngine`/`IScoringEngine`,
       `ScoreResult`, `ScoringOptions`, `PitchSample`, `ReferenceNote`, `ReferenceMelody`).
       34 tests.
-- [ ] Mic -> `PitchSample` plumbing in App (latency-corrected playback time + energy channel).
-- [ ] Result screen.
+- [x] Mic -> `PitchSample` plumbing in App (`PitchMonitor`: latency-corrected playback time +
+      RMS energy, accumulated for scoring). PR #24.
+- [x] Result screen: score on song end, overlay with Overall + Grade + sub-scores + technique
+      counts. PR #25. (Needs owner runtime check — real score depends on mic + latency.)
 
 ## P5 — Library & operation
 - [ ] Song-select remote (by number / title / artist search).

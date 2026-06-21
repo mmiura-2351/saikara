@@ -81,12 +81,16 @@ The owner monitors only; this project must self-sustain across a long, context-l
 
 ## Status
 
-**P0 + P1 complete (P1 runtime-verified by the owner).** `Saikara.Core`: `MusicMath`, SQLite
-`ISongLibrary`, MIDI layer (`MidiSong`/`MidiLoader`/`MidiTransforms`/`MelodyTrackDetector`,
-DryWetMIDI), audio Core (`IAudioEngine`, `SoundFontInstaller`, `MidiSerializer`) — 84 tests.
-`Saikara.App`: two-window WinUI app; operator search + dual-monitor; `MeltySynthAudioEngine`
-(MeltySynth + NAudio) with Open-MIDI / play-pause-stop / seek / key / tempo — audio confirmed
-working (PRs #11–#19). GitHub Actions also publishes a self-contained runnable artifact.
-**Next: P2 — lyric telop (issue #4).** Group `MidiSong.Lyrics` into telop lines in Core;
-render a two-line color-wipe telop on the display window synced to playback; guide-melody on/off.
-The raw lyric events are already parsed in `MidiSong.Lyrics` (time + text + `IsLyric`).
+**P0–P4 essentially complete; P1 runtime-verified by the owner. Owner is away — running
+unattended through the roadmap (build + CI-verify; runtime audio/visual/mic checks deferred to
+the owner, flagged in PRs).** `Saikara.Core` (176 tests): `MusicMath`, SQLite `ISongLibrary`,
+MIDI (`MidiSong`/`MidiLoader`/`MidiTransforms`/`MelodyTrackDetector`), audio (`IAudioEngine`,
+`SoundFontInstaller`, `MidiSerializer`), lyrics telop (`LyricTelopBuilder`/`TelopPlayback`),
+pitch (`McLeodPitchDetector`), scoring (`ScoringEngine` — DAM-style sub-scores + ornaments).
+`Saikara.App`: two-window WinUI app; operator (search, transport, key/tempo); display (color-wipe
+telop, live mic pitch bar, scoring result overlay); `MeltySynthAudioEngine` (MeltySynth + NAudio);
+`PitchMonitor` (WASAPI mic capture). PRs #11–#25. GitHub Actions publishes a self-contained runnable
+artifact.
+**Remaining:** P2 guide-melody on/off; P3 latency calibration; **P5** library/operation
+(reservation queue + score history persistence); **P6** correction editor; **P7** internet
+MIDI/KAR import; **P8** polish. Work top-down through the roadmap.
