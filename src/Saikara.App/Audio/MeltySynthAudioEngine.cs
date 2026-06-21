@@ -4,6 +4,7 @@ using System.IO;
 using Microsoft.UI.Dispatching;
 using NAudio.Wave;
 using Saikara.Core.Audio;
+using Saikara.Core.Editor;
 using Saikara.Core.Lyrics;
 using Saikara.Core.Midi;
 using Saikara.Core.Scoring;
@@ -56,6 +57,20 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
     private readonly DispatcherQueueTimer? _positionTimer;
     private readonly MidiSerializer _serializer = new();
     private readonly LyricTelopBuilder _telopBuilder = new();
+
+    /// <summary>
+    /// The corrections store, injected after construction via <see cref="SetCorrectionsSource"/>.
+    /// <see langword="null"/> until wired. When set, <see cref="BuildAndLoadSequence"/> loads and
+    /// applies corrections for the current song before building the telop and reference.
+    /// </summary>
+    private ISongCorrectionsStore? _correctionsStore;
+
+    /// <summary>
+    /// A delegate that returns the current song number from <see cref="Services.INowPlaying"/>.
+    /// Injected alongside <see cref="_correctionsStore"/> so the engine can look up corrections
+    /// without a direct dependency on the operator's state.
+    /// </summary>
+    private Func<string?>? _songNumberAccessor;
 
     /// <summary>
     /// Telop lines for the currently loaded sequence, built from the tempo-transformed song so
@@ -227,6 +242,26 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
         }
     }
 
+    /// <summary>
+    /// Wires the corrections store and song-number accessor into the engine so that
+    /// <see cref="BuildAndLoadSequence"/> can load and apply corrections. Called once from
+    /// <see cref="App"/> after DI resolves the store and the <see cref="Services.INowPlaying"/>
+    /// singleton.
+    /// </summary>
+    /// <param name="store">The corrections store.</param>
+    /// <param name="songNumberAccessor">Returns the current song number, or <see langword="null"/> for ad-hoc opens.</param>
+    public void SetCorrectionsSource(ISongCorrectionsStore store, Func<string?> songNumberAccessor)
+    {
+        _correctionsStore = store ?? throw new ArgumentNullException(nameof(store));
+        _songNumberAccessor = songNumberAccessor ?? throw new ArgumentNullException(nameof(songNumberAccessor));
+    }
+
+    /// <summary>
+    /// Triggers a position-preserving rebuild so that freshly saved (or deleted) corrections take
+    /// effect immediately. Called by the operator view-model after saving/resetting corrections.
+    /// </summary>
+    public void ApplyCorrectionsAndRebuild() => RebuildPreservingPosition();
+
     /// <inheritdoc />
     public event EventHandler? StateChanged;
 
@@ -383,17 +418,47 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
         MidiSong transformed = MidiTransforms.Transpose(_sourceSong, _semitoneOffset);
         transformed = MidiTransforms.ScaleTempo(transformed, _tempoPercent);
 
+        // P6: apply song corrections (melody track override + lyric timing shift) if the store
+        // is wired and a numbered song is loaded. The corrected result provides adjusted lyrics
+        // and an explicit melody track index that override auto-detection.
+        CorrectedSong? corrected = null;
+        if (_correctionsStore is not null && _songNumberAccessor is not null)
+        {
+            string? number = _songNumberAccessor();
+            if (!string.IsNullOrEmpty(number))
+            {
+                SongCorrections? corrections = null;
+                try
+                {
+                    // Synchronous wait is acceptable here: the store's GetAsync does a single
+                    // indexed SQLite lookup (< 1 ms), and BuildAndLoadSequence already runs under
+                    // a transport pause so no audio thread is starved. Using .GetAwaiter().GetResult()
+                    // avoids the deadlock risk of .Result on a UI-thread SynchronizationContext
+                    // because the store uses ConfigureAwait(false) internally.
+                    corrections = _correctionsStore.GetAsync(number)
+                        .ConfigureAwait(false).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[Saikara] Failed to load corrections for {number}: {ex}");
+                }
+
+                corrected = CorrectedSongBuilder.Apply(transformed, corrections);
+            }
+        }
+
+        // Resolve the melody track: correction override > auto-detect > null.
+        int? melodyTrackIndex = corrected?.MelodyTrackIndex
+                                ?? MelodyTrackDetector.Detect(transformed);
+
         // Mute the melody track when guide melody is disabled. The mute operates on the
         // serialized bytes (zeroed velocity) but the reference/telop are still derived from
         // the pre-mute transformed song so scoring and lyric sync are unaffected.
         MidiSong forSynth = transformed;
-        if (!_isGuideMelodyEnabled)
+        if (!_isGuideMelodyEnabled && melodyTrackIndex is int muteIdx)
         {
-            int? melodyIdx = MelodyTrackDetector.Detect(transformed);
-            if (melodyIdx is int idx)
-            {
-                forSynth = MidiTransforms.MuteTrack(transformed, idx);
-            }
+            forSynth = MidiTransforms.MuteTrack(transformed, muteIdx);
         }
 
         byte[] bytes = _serializer.ToBytes(forSynth);
@@ -401,15 +466,21 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
         // Duration tracks the transformed (tempo-scaled) song, as the contract requires.
         _duration = transformed.Duration;
 
-        // Rebuild the telop from the transformed song so syllable times line up with the clock.
-        // This runs even in disabled mode so the display still shows lyrics without audio.
-        RebuildTelopFrom(transformed);
+        // Rebuild the telop: use corrected lyrics (with timing shifts) when available,
+        // otherwise fall back to the transformed song's lyrics.
+        if (corrected is not null)
+        {
+            RebuildTelopFromLyrics(corrected.Lyrics);
+        }
+        else
+        {
+            RebuildTelopFrom(transformed);
+        }
 
-        // Rebuild the reference melody from the same transformed song. The key offset is already
-        // baked into `transformed`, so pass offset 0 to ReferenceMelody.FromTrack (transposing again
-        // would double-apply the key). Runs even in disabled mode so the pitch bar still shows the
-        // target line without audio.
-        RebuildReferenceFrom(transformed);
+        // Rebuild the reference melody using the resolved melody track index (correction
+        // override or auto-detect). The key offset is already baked into `transformed`, so
+        // pass offset 0. Runs even in disabled mode so the pitch bar still shows the target.
+        RebuildReferenceFrom(transformed, melodyTrackIndex);
 
         if (!IsPlaybackEnabled || _sequencer is null)
         {
@@ -546,6 +617,22 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
     private void RaisePositionChanged() => PositionChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>
+    /// Rebuilds <see cref="_telopLines"/> from corrected lyrics (P6) and raises
+    /// <see cref="TelopChanged"/> when the line set actually changed.
+    /// </summary>
+    private void RebuildTelopFromLyrics(IReadOnlyList<LyricEvent> lyrics)
+    {
+        IReadOnlyList<TelopLine> rebuilt = _telopBuilder.Build(lyrics);
+        if (TelopLinesEqual(_telopLines, rebuilt))
+        {
+            return;
+        }
+
+        _telopLines = rebuilt;
+        RaiseTelopChanged();
+    }
+
+    /// <summary>
     /// Rebuilds <see cref="_telopLines"/> from the transformed song and raises
     /// <see cref="TelopChanged"/> (on the UI thread) when the line set actually changed. Seeks and
     /// key changes leave the lyric timeline untouched, so the rebuilt lines compare equal and no
@@ -586,16 +673,20 @@ public sealed class MeltySynthAudioEngine : IAudioEngine, ITelopSource, IReferen
     }
 
     /// <summary>
-    /// Rebuilds <see cref="_referenceNotes"/> from the transformed song's detected melody track and
-    /// raises <see cref="ReferenceChanged"/> (on the UI thread) when the note set actually changed.
-    /// A seek leaves the reference timeline untouched, so the rebuilt notes compare equal and no
-    /// event fires; a load, key change, or tempo change produces a different set and notifies.
+    /// Rebuilds <see cref="_referenceNotes"/> from the transformed song using the given melody track
+    /// index and raises <see cref="ReferenceChanged"/> (on the UI thread) when the note set actually
+    /// changed. A seek leaves the reference timeline untouched, so the rebuilt notes compare equal
+    /// and no event fires; a load, key change, or tempo change produces a different set and notifies.
     /// </summary>
-    private void RebuildReferenceFrom(MidiSong transformed)
+    /// <param name="transformed">The key/tempo-transformed song.</param>
+    /// <param name="melodyTrackIndex">
+    /// The melody track index (from corrections or auto-detect), or <see langword="null"/> if none.
+    /// </param>
+    private void RebuildReferenceFrom(MidiSong transformed, int? melodyTrackIndex = null)
     {
-        // `transformed` already has the key and tempo applied, so the melody detection runs against
-        // exactly what is heard and FromTrack is called with offset 0 (no further transpose).
-        int? melodyIdx = MelodyTrackDetector.Detect(transformed);
+        // `transformed` already has the key and tempo applied, so FromTrack is called with
+        // offset 0 (no further transpose).
+        int? melodyIdx = melodyTrackIndex ?? MelodyTrackDetector.Detect(transformed);
         IReadOnlyList<ReferenceNote> rebuilt = melodyIdx is int i
             ? ReferenceMelody.FromTrack(transformed, i, 0)
             : Array.Empty<ReferenceNote>();

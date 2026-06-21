@@ -10,6 +10,7 @@ using Saikara.App.Services;
 using Saikara.App.ViewModels;
 using Saikara.App.Views;
 using Saikara.Core.Audio;
+using Saikara.Core.Editor;
 using Saikara.Core.History;
 using Saikara.Core.Import;
 using Saikara.Core.Library;
@@ -65,6 +66,12 @@ public partial class App : Application
         var scoreHistory = GetService<IScoreHistory>();
         await scoreHistory.InitializeAsync();
 
+        // P6: create the song-corrections schema before any correction is saved. Shares the same
+        // SQLite DB file as the library (a separate SongCorrections table); InitializeAsync is
+        // idempotent.
+        var correctionsStore = GetService<ISongCorrectionsStore>();
+        await correctionsStore.InitializeAsync();
+
         // P1 audio bootstrap. Ensure the default SoundFont exists (first-run download), then
         // build the audio engine on the UI thread so its DispatcherQueueTimer marshals
         // PositionChanged to the UI. Robust to download failure: the engine constructs in a
@@ -74,6 +81,12 @@ public partial class App : Application
         // Operator window: song-select remote, reservation queue, key/tempo controls.
         // Stays on the primary monitor.
         _operatorWindow = GetService<OperatorWindow>();
+
+        // P8: surface the SoundFont path on the operator settings section. The installer
+        // resolves the default path regardless of whether the file was downloaded.
+        var sfInstaller = GetService<SoundFontInstaller>();
+        _operatorWindow.ViewModel.SoundFontPath = sfInstaller.DefaultSoundFontPath;
+
         _operatorWindow.Activate();
 
         // Display window: lyric telop, background, real-time pitch bar. Placed on a
@@ -109,6 +122,16 @@ public partial class App : Application
         var holder = GetService<AudioEngineHolder>();
         holder.Initialize(installer.DefaultSoundFontPath, dispatcherQueue);
 
+        // P6: wire the corrections store and the song-number accessor into the engine so
+        // BuildAndLoadSequence can load and apply corrections for the current song. The accessor
+        // reads from the shared INowPlaying singleton, which the operator sets on every load.
+        if (holder.Engine is MeltySynthAudioEngine concreteEngine)
+        {
+            var correctionsStore = GetService<ISongCorrectionsStore>();
+            var nowPlaying = GetService<INowPlaying>();
+            concreteEngine.SetCorrectionsSource(correctionsStore, () => nowPlaying.CurrentSong?.Number);
+        }
+
         // P3: build the pitch monitor against the now-constructed engine, then wire it to the
         // transport. The monitor opens no device until playback starts (and degrades gracefully if
         // there is no microphone), so this never blocks startup.
@@ -142,6 +165,12 @@ public partial class App : Application
         // history instance is shared so the display window's saves and best/recent lookups hit the
         // same open connection.
         services.AddSingleton<IScoreHistory>(_ => new SqliteScoreHistory(GetLibraryDatabasePath()));
+
+        // P6 song corrections (REQUIREMENTS §6). Singleton over the SAME SQLite DB file as the
+        // library (its own SongCorrections table, created by InitializeAsync at startup). Shared so
+        // the operator editor and the engine read/write the same data.
+        services.AddSingleton<ISongCorrectionsStore>(_ =>
+            new SqliteSongCorrectionsStore(GetLibraryDatabasePath()));
 
         // P5 shared current-song state. Singleton so the operator (which sets it on load) and the
         // display (which reads it when a score is produced) agree on what is playing.
@@ -183,8 +212,19 @@ public partial class App : Application
         // song end against the collected mic samples and the reference melody.
         services.AddSingleton<IScoringEngine, ScoringEngine>();
 
-        // View-models. Transient so each window instance gets its own state.
-        services.AddTransient<OperatorViewModel>();
+        // View-models. Transient so each window instance gets its own state. The operator VM now
+        // needs the corrections store (P6), pitch monitor (P8 latency), and the dispatcher queue
+        // (P8 queue-advance timer).
+        services.AddTransient(sp => new OperatorViewModel(
+            sp.GetRequiredService<IAppInfoService>(),
+            sp.GetRequiredService<ISongLibrary>(),
+            sp.GetRequiredService<IAudioEngine>(),
+            sp.GetRequiredService<IMidiLoader>(),
+            sp.GetRequiredService<IMidiImportService>(),
+            sp.GetRequiredService<ISongCorrectionsStore>(),
+            sp.GetRequiredService<INowPlaying>(),
+            sp.GetRequiredService<IPitchMonitor>(),
+            DispatcherQueue.GetForCurrentThread()));
 
         // DisplayViewModel needs the UI DispatcherQueue for its ~30 fps telop/pitch-bar frame timer,
         // and the pitch monitor for the live sung pitch. It is resolved in OnLaunched on the UI

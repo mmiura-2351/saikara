@@ -55,6 +55,10 @@ public sealed partial class OperatorWindow : Window
     /// <summary>Boolean negation for <c>x:Bind</c> (shows the "playback unavailable" banner when NOT enabled).</summary>
     public static bool Not(bool value) => !value;
 
+    /// <summary>Bool-to-Visibility for <c>x:Bind</c> (P6 correction editor visibility).</summary>
+    public static Visibility BoolToVisibility(bool value) =>
+        value ? Visibility.Visible : Visibility.Collapsed;
+
     /// <summary>Whether the Play command is currently allowed (a song is loaded and not already playing).</summary>
     public static bool CanPlay(bool isSongLoaded, bool isPlaybackEnabled, PlaybackState state) =>
         isSongLoaded && isPlaybackEnabled && state != PlaybackState.Playing;
@@ -168,8 +172,8 @@ public sealed partial class OperatorWindow : Window
     {
         var hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
         var scale = GetDpiForWindow(hwnd) / 96.0;
-        // Taller than the P0 layout: the left column now also carries the playback transport
-        // (open-file, file label, optional banner, play/pause/stop, seek slider, time labels).
-        AppWindow.Resize(new SizeInt32((int)(1180 * scale), (int)(940 * scale)));
+        // Taller than the P0 layout: the left column now also carries the playback transport,
+        // correction editor (P6), and settings section (P8). ScrollViewer handles overflow.
+        AppWindow.Resize(new SizeInt32((int)(1180 * scale), (int)(980 * scale)));
     }
 }
