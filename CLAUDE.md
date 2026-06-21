@@ -56,7 +56,22 @@ SDK is pinned to .NET 8 via `global.json` (the box also has a .NET 10 SDK; do no
 - New algorithmic code in `Core` is TDD-first: write the xUnit test, make it pass on Linux.
 - Add NuGet packages only when first used; pin versions; prefer stable releases.
 
+## Sustaining autonomous development
+
+The owner monitors only; this project must self-sustain across a long, context-limited run.
+
+- **Delegate** self-contained work to subagents — the `saikara-core-dev` agent for Core
+  features, `winui:winui-dev` for UI, `Explore` for searches — so heavy work happens in
+  their context, not the main one. Keep the main context lean; relay conclusions.
+- **Skills** encode the recurring loops: `saikara-feature` (build a feature),
+  `saikara-ci` (branch→PR→CI→merge & triage), `saikara-maintenance` (periodic upkeep).
+- **External memory** survives context compaction: keep the harness memory files and these
+  in-repo docs current. Surface progress on GitHub (issues, PRs, green CI).
+- **Maintenance:** run `saikara-maintenance` at phase boundaries — keep ROADMAP, issues,
+  CLAUDE.md, memory, skills, and agents from drifting away from the code.
+
 ## Status
 
-P0 in progress. Done: solution, `Saikara.Core` (`MusicMath`) + 15 passing tests, CI, docs.
+P0 in progress. Done: solution, `Saikara.Core` (`MusicMath`) + 15 passing tests, CI green
+(Linux + Windows), docs, and the autonomous-dev infra (agent, skills, memory).
 Next: scaffold `Saikara.App` (WinUI skeleton) and get the Windows build green. See roadmap.
