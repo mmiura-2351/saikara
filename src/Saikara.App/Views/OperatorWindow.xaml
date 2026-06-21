@@ -187,6 +187,57 @@
                     OffContent="Off"
                     OnContent="On" />
 
+                <!-- P6: Song settings / correction editor. Shown only when a numbered library
+                     song is loaded. Lets the operator override the melody track and adjust lyric
+                     timing. Wrapped in an Expander so it does not crowd the default view. -->
+                <Expander
+                    AutomationProperties.AutomationId="OperatorSongSettingsExpander"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Header="Song settings"
+                    IsExpanded="False"
+                    Visibility="{x:Bind local:OperatorWindow.BoolToVisibility(ViewModel.IsCorrectionEditorVisible), Mode=OneWay}">
+                    <StackPanel Spacing="12">
+                        <ComboBox
+                            AutomationProperties.AutomationId="OperatorMelodyTrackComboBox"
+                            Header="Melody track"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{x:Bind ViewModel.TrackNames}"
+                            PlaceholderText="(auto-detect)"
+                            SelectedIndex="{x:Bind ViewModel.SelectedMelodyTrackIndex, Mode=TwoWay}" />
+
+                        <NumberBox
+                            AutomationProperties.AutomationId="OperatorLyricOffsetNumberBox"
+                            Header="Lyric offset (ms)"
+                            LargeChange="100"
+                            Maximum="2000"
+                            Minimum="-2000"
+                            SmallChange="10"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.LyricOffsetMs, Mode=TwoWay}" />
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                Grid.Column="0"
+                                AutomationProperties.AutomationId="OperatorSaveCorrectionsButton"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.SaveCorrectionsCommand}"
+                                Content="Save"
+                                Style="{StaticResource AccentButtonStyle}" />
+                            <Button
+                                Grid.Column="1"
+                                AutomationProperties.AutomationId="OperatorResetCorrectionsButton"
+                                HorizontalAlignment="Stretch"
+                                Command="{x:Bind ViewModel.ResetCorrectionsCommand}"
+                                Content="Reset" />
+                        </Grid>
+                    </StackPanel>
+                </Expander>
+
                 <!-- Playback transport (P1) -->
                 <TextBlock
                     Margin="0,8,0,0"
@@ -276,6 +327,46 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Text="{x:Bind ViewModel.TotalText, Mode=OneWay}" />
                 </Grid>
+
+                <!-- P8: Settings section -->
+                <Expander
+                    AutomationProperties.AutomationId="OperatorSettingsExpander"
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Header="Settings"
+                    IsExpanded="False">
+                    <StackPanel Spacing="12">
+                        <NumberBox
+                            AutomationProperties.AutomationId="OperatorLatencyOffsetNumberBox"
+                            Header="Latency offset (ms)"
+                            LargeChange="50"
+                            Maximum="500"
+                            Minimum="0"
+                            SmallChange="10"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.LatencyOffsetMs, Mode=TwoWay}" />
+
+                        <TextBlock
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Compensates mic-to-playback latency for scoring accuracy."
+                            TextWrapping="Wrap" />
+
+                        <TextBlock
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="SoundFont" />
+
+                        <TextBlock
+                            AutomationProperties.AutomationId="OperatorSoundFontPathText"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            IsTextSelectionEnabled="True"
+                            Text="{x:Bind ViewModel.SoundFontPath, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Expander>
                 </StackPanel>
             </ScrollViewer>
 

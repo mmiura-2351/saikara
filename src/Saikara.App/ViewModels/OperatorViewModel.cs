@@ -4,10 +4,12 @@ using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 using Saikara.App.Audio;
 using Saikara.App.Services;
 using Saikara.Core.Audio;
+using Saikara.Core.Editor;
 using Saikara.Core.Import;
 using Saikara.Core.Library;
 using Saikara.Core.Midi;
@@ -29,7 +31,9 @@ public partial class OperatorViewModel : ObservableObject
     private readonly IAudioEngine _audioEngine;
     private readonly IMidiLoader _midiLoader;
     private readonly IMidiImportService _importService;
+    private readonly ISongCorrectionsStore _correctionsStore;
     private readonly INowPlaying _nowPlaying;
+    private readonly IPitchMonitor _pitchMonitor;
 
     /// <summary>
     /// Guards <see cref="PositionSeconds"/> against feedback: when the engine's
@@ -37,6 +41,30 @@ public partial class OperatorViewModel : ObservableObject
     /// resulting setter call as a user seek.
     /// </summary>
     private bool _isSyncingPositionFromEngine;
+
+    /// <summary>
+    /// The transport state seen on the previous <see cref="IAudioEngine.StateChanged"/>. Used to
+    /// detect the Playing -> Stopped transition for the queue auto-advance feature (P8).
+    /// </summary>
+    private PlaybackState _lastPlaybackState = PlaybackState.Stopped;
+
+    /// <summary>
+    /// Timer that fires once after a short delay (~3 seconds) to auto-load and play the next
+    /// queued song after the current one ends. Created lazily on the first end-of-song transition.
+    /// </summary>
+    private DispatcherQueueTimer? _queueAdvanceTimer;
+
+    /// <summary>
+    /// The dispatcher queue for creating timers and marshaling to the UI thread.
+    /// </summary>
+    private readonly DispatcherQueue _dispatcherQueue;
+
+    /// <summary>
+    /// The <see cref="MidiSong"/> tracks of the currently loaded song, cached for the correction
+    /// editor so the user can pick a melody track from the list. <see langword="null"/> when no song
+    /// is loaded.
+    /// </summary>
+    private MidiSong? _loadedMidiSong;
 
     /// <summary>
     /// Optional file-picker hook supplied by the window code-behind. The picker must be
@@ -58,19 +86,29 @@ public partial class OperatorViewModel : ObservableObject
         IAudioEngine audioEngine,
         IMidiLoader midiLoader,
         IMidiImportService importService,
-        INowPlaying nowPlaying)
+        ISongCorrectionsStore correctionsStore,
+        INowPlaying nowPlaying,
+        IPitchMonitor pitchMonitor,
+        DispatcherQueue dispatcherQueue)
     {
         _appInfo = appInfo;
         _library = library;
         _audioEngine = audioEngine;
         _midiLoader = midiLoader;
         _importService = importService;
+        _correctionsStore = correctionsStore;
         _nowPlaying = nowPlaying;
+        _pitchMonitor = pitchMonitor;
+        _dispatcherQueue = dispatcherQueue;
 
         // Seed transport state from the engine, then follow it.
         _isPlaybackEnabled = (_audioEngine as MeltySynthAudioEngine)?.IsPlaybackEnabled ?? true;
+        _lastPlaybackState = _audioEngine.State;
         _audioEngine.StateChanged += OnEngineStateChanged;
         _audioEngine.PositionChanged += OnEnginePositionChanged;
+
+        // Seed the latency offset from the pitch monitor (P8 settings).
+        _latencyOffsetMs = _pitchMonitor.LatencyOffset.TotalMilliseconds;
     }
 
     /// <summary>Application name, surfaced in the operator header.</summary>
@@ -150,6 +188,66 @@ public partial class OperatorViewModel : ObservableObject
     /// <summary>Mirror of <see cref="IAudioEngine.State"/> for the UI (button enablement / glyphs).</summary>
     [ObservableProperty]
     private PlaybackState _playbackState = PlaybackState.Stopped;
+
+    // ---- P6 Correction editor ----
+
+    /// <summary>
+    /// <see langword="true"/> when a library song with a <see cref="Song.Number"/> is loaded. The
+    /// correction editor section is only shown for numbered songs (ad-hoc opens are excluded
+    /// because corrections are keyed by number).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isCorrectionEditorVisible;
+
+    /// <summary>
+    /// Display names for each track in the loaded song (e.g. "0: Piano", "1: Melody"). Bound to
+    /// the melody-track <c>ComboBox</c>.
+    /// </summary>
+    public ObservableCollection<string> TrackNames { get; } = new();
+
+    /// <summary>
+    /// The index of the selected melody track in the <see cref="TrackNames"/> list. -1 means
+    /// "auto-detect". Bound two-way to the <c>ComboBox.SelectedIndex</c>.
+    /// </summary>
+    [ObservableProperty]
+    private int _selectedMelodyTrackIndex = -1;
+
+    /// <summary>
+    /// Global lyric timing offset in milliseconds. Positive delays lyrics, negative advances them.
+    /// Bound two-way to the <c>NumberBox</c>.
+    /// </summary>
+    [ObservableProperty]
+    private double _lyricOffsetMs;
+
+    /// <summary>
+    /// <see langword="true"/> when a save operation is in flight, to prevent double-clicks.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSavingCorrections;
+
+    // ---- P8 Settings ----
+
+    /// <summary>
+    /// Latency offset in milliseconds, bound two-way to a <c>NumberBox</c> on the settings section.
+    /// Pushed into <see cref="IPitchMonitor.LatencyOffset"/> on change.
+    /// </summary>
+    [ObservableProperty]
+    private double _latencyOffsetMs = 100;
+
+    /// <summary>
+    /// Display path of the current SoundFont file (informational). Read-only in the UI.
+    /// </summary>
+    [ObservableProperty]
+    private string _soundFontPath = string.Empty;
+
+    /// <summary>Pushes a latency change to the pitch monitor (P8).</summary>
+    partial void OnLatencyOffsetMsChanged(double value)
+    {
+        if (value >= 0)
+        {
+            _pitchMonitor.LatencyOffset = TimeSpan.FromMilliseconds(value);
+        }
+    }
 
     /// <summary>
     /// Playback position in seconds, bound two-way to the seek <c>Slider</c>. Engine-driven
@@ -382,6 +480,8 @@ public partial class OperatorViewModel : ObservableObject
             return false;
         }
 
+        _loadedMidiSong = song;
+
         _audioEngine.Load(song);
 
         // Reapply the operator's current key/tempo to the freshly loaded song.
@@ -393,7 +493,65 @@ public partial class OperatorViewModel : ObservableObject
         IsSongLoaded = true;
         SyncDurationFromEngine();
         SyncPositionFromEngine();
+
+        // P6: populate the correction editor for this song.
+        await PopulateCorrectionEditorAsync(song, libraryEntry).ConfigureAwait(true);
+
         return true;
+    }
+
+    /// <summary>
+    /// Populates the correction editor section from the loaded song's tracks and any saved
+    /// corrections. Shows the section only for numbered library songs (corrections are keyed
+    /// by song number; ad-hoc opens cannot have corrections).
+    /// </summary>
+    private async Task PopulateCorrectionEditorAsync(MidiSong midiSong, Song? libraryEntry)
+    {
+        // Build the track name list from the loaded MIDI.
+        TrackNames.Clear();
+        for (int i = 0; i < midiSong.Tracks.Count; i++)
+        {
+            MidiTrack track = midiSong.Tracks[i];
+            string label = string.IsNullOrWhiteSpace(track.Name)
+                ? $"{i}: (unnamed, {track.Notes.Count} notes)"
+                : $"{i}: {track.Name} ({track.Notes.Count} notes)";
+            TrackNames.Add(label);
+        }
+
+        string? number = libraryEntry?.Number;
+        if (string.IsNullOrEmpty(number))
+        {
+            // No library number => hide the editor, use auto-detect defaults.
+            IsCorrectionEditorVisible = false;
+            SelectedMelodyTrackIndex = MelodyTrackDetector.Detect(midiSong) ?? -1;
+            LyricOffsetMs = 0;
+            return;
+        }
+
+        // Load saved corrections for this song.
+        SongCorrections? saved = null;
+        try
+        {
+            saved = await _correctionsStore.GetAsync(number).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Saikara] Failed to load corrections: {ex}");
+        }
+
+        if (saved is not null)
+        {
+            SelectedMelodyTrackIndex = saved.MelodyTrackIndex ?? (MelodyTrackDetector.Detect(midiSong) ?? -1);
+            LyricOffsetMs = saved.LyricOffsetMs;
+        }
+        else
+        {
+            // No saved corrections — seed from auto-detect.
+            SelectedMelodyTrackIndex = MelodyTrackDetector.Detect(midiSong) ?? -1;
+            LyricOffsetMs = 0;
+        }
+
+        IsCorrectionEditorVisible = true;
     }
 
     /// <summary>Opens the import-status InfoBar with the given message and severity.</summary>
@@ -423,6 +581,76 @@ public partial class OperatorViewModel : ObservableObject
     /// <summary>Stops playback and rewinds to the start.</summary>
     [RelayCommand]
     private void Stop() => _audioEngine.Stop();
+
+    // ---- P6 Correction editor commands ----
+
+    /// <summary>
+    /// Saves the current melody-track and lyric-offset corrections for the loaded song. After
+    /// saving, triggers a sequence rebuild so the changes take effect immediately (even during
+    /// playback). No-op when no numbered song is loaded.
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveCorrectionsAsync()
+    {
+        string? number = CurrentSong?.Number;
+        if (string.IsNullOrEmpty(number) || IsSavingCorrections)
+        {
+            return;
+        }
+
+        IsSavingCorrections = true;
+        try
+        {
+            var corrections = new SongCorrections
+            {
+                MelodyTrackIndex = SelectedMelodyTrackIndex >= 0 ? SelectedMelodyTrackIndex : null,
+                LyricOffsetMs = LyricOffsetMs,
+            };
+
+            await _correctionsStore.SaveAsync(number, corrections).ConfigureAwait(true);
+
+            // Rebuild the sequence with corrections applied. The engine's RebuildPreservingPosition
+            // re-runs BuildAndLoadSequence which now loads corrections from the store.
+            if (_audioEngine is MeltySynthAudioEngine concrete)
+            {
+                concrete.ApplyCorrectionsAndRebuild();
+            }
+        }
+        finally
+        {
+            IsSavingCorrections = false;
+        }
+    }
+
+    /// <summary>
+    /// Deletes any saved corrections for the loaded song and reverts to auto-detection for the
+    /// melody track and zero lyric offset. Triggers a sequence rebuild. No-op when no numbered
+    /// song is loaded.
+    /// </summary>
+    [RelayCommand]
+    private async Task ResetCorrectionsAsync()
+    {
+        string? number = CurrentSong?.Number;
+        if (string.IsNullOrEmpty(number))
+        {
+            return;
+        }
+
+        await _correctionsStore.DeleteAsync(number).ConfigureAwait(true);
+
+        // Revert the editor UI to defaults.
+        int? autoDetected = _loadedMidiSong is not null
+            ? MelodyTrackDetector.Detect(_loadedMidiSong)
+            : null;
+        SelectedMelodyTrackIndex = autoDetected ?? -1;
+        LyricOffsetMs = 0;
+
+        // Rebuild with no corrections.
+        if (_audioEngine is MeltySynthAudioEngine concrete)
+        {
+            concrete.ApplyCorrectionsAndRebuild();
+        }
+    }
 
     /// <summary>Pushes a key change to the engine when <see cref="KeyOffset"/> changes.</summary>
     partial void OnKeyOffsetChanged(int value) => _audioEngine.SemitoneOffset = value;
@@ -464,10 +692,78 @@ public partial class OperatorViewModel : ObservableObject
 
     private void OnEngineStateChanged(object? sender, EventArgs e)
     {
-        // PositionChanged/StateChanged may arrive on a background thread per the contract, but
-        // this engine raises them via its UI DispatcherQueueTimer, so direct VM updates are safe.
-        PlaybackState = _audioEngine.State;
+        PlaybackState state = _audioEngine.State;
+
+        // Marshal to UI thread since StateChanged may arrive from a background thread.
+        if (_dispatcherQueue.HasThreadAccess)
+        {
+            ApplyEngineState(state);
+        }
+        else
+        {
+            _dispatcherQueue.TryEnqueue(() => ApplyEngineState(state));
+        }
+    }
+
+    /// <summary>
+    /// Applies a transport state change. On a Playing -> Stopped transition (song finished or
+    /// stopped), starts the queue-advance timer (P8) if the reservation queue is non-empty.
+    /// </summary>
+    private void ApplyEngineState(PlaybackState state)
+    {
+        bool endedFromPlaying = state == PlaybackState.Stopped &&
+                                _lastPlaybackState == PlaybackState.Playing;
+        _lastPlaybackState = state;
+
+        PlaybackState = state;
         SyncPositionFromEngine();
+
+        if (endedFromPlaying && ReservationQueue.Count > 0)
+        {
+            StartQueueAdvanceTimer();
+        }
+    }
+
+    /// <summary>
+    /// Starts a one-shot ~3 second timer that loads and plays the next song from the reservation
+    /// queue. The delay gives the scorer overlay time to appear before the next song begins.
+    /// </summary>
+    private void StartQueueAdvanceTimer()
+    {
+        if (_queueAdvanceTimer is null)
+        {
+            _queueAdvanceTimer = _dispatcherQueue.CreateTimer();
+            _queueAdvanceTimer.Interval = TimeSpan.FromSeconds(3);
+            _queueAdvanceTimer.IsRepeating = false;
+            _queueAdvanceTimer.Tick += OnQueueAdvanceTimerTick;
+        }
+
+        _queueAdvanceTimer.Start();
+    }
+
+    /// <summary>
+    /// Fires once after the delay: removes the front song from the queue and loads/plays it.
+    /// </summary>
+    private async void OnQueueAdvanceTimerTick(DispatcherQueueTimer sender, object args)
+    {
+        _queueAdvanceTimer?.Stop();
+
+        if (ReservationQueue.Count == 0)
+        {
+            return;
+        }
+
+        Song nextSong = ReservationQueue[0];
+        ReservationQueue.RemoveAt(0);
+
+        string fileName = Path.GetFileName(nextSong.FilePath);
+        bool loaded = await LoadFileIntoEngineAsync(nextSong.FilePath, fileName, libraryEntry: nextSong)
+            .ConfigureAwait(true);
+
+        if (loaded && IsPlaybackEnabled)
+        {
+            _audioEngine.Play();
+        }
     }
 
     private void OnEnginePositionChanged(object? sender, EventArgs e) => SyncPositionFromEngine();
