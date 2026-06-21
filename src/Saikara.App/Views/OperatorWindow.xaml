@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Saikara.App.Views.OperatorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Saikara.App.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel
+            Grid.Row="0"
+            Padding="24,16"
+            Spacing="2">
+            <TextBlock
+                Style="{StaticResource TitleTextBlockStyle}"
+                Text="{x:Bind ViewModel.AppName}" />
+            <TextBlock
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Operator console" />
+        </StackPanel>
+
+        <!-- Sidebar (song-select + key/tempo) | reservation queue -->
+        <Grid Grid.Row="1" Padding="24,0,24,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: song-select remote + key/tempo controls -->
+            <StackPanel
+                Grid.Column="0"
+                Margin="0,0,24,0"
+                Spacing="16">
+
+                <TextBlock
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Song select" />
+
+                <AutoSuggestBox
+                    AutomationProperties.AutomationId="OperatorSearchBox"
+                    PlaceholderText="Number, title or artist"
+                    QueryIcon="Find"
+                    Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <Button
+                    AutomationProperties.AutomationId="OperatorAddToQueueButton"
+                    HorizontalAlignment="Stretch"
+                    Command="{x:Bind ViewModel.AddToQueueCommand}"
+                    Content="Add to queue"
+                    Style="{StaticResource AccentButtonStyle}" />
+
+                <TextBlock
+                    Margin="0,8,0,0"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Key &amp; tempo" />
+
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Text="{x:Bind local:OperatorWindow.FormatKey(ViewModel.KeyOffset), Mode=OneWay}" />
+                    <Button
+                        Grid.Column="1"
+                        AutomationProperties.AutomationId="OperatorKeyDownButton"
+                        AutomationProperties.Name="Key down"
+                        Command="{x:Bind ViewModel.KeyDownCommand}"
+                        Content="&#x2212;" />
+                    <Button
+                        Grid.Column="2"
+                        AutomationProperties.AutomationId="OperatorKeyUpButton"
+                        AutomationProperties.Name="Key up"
+                        Command="{x:Bind ViewModel.KeyUpCommand}"
+                        Content="&#x2B;" />
+                </Grid>
+
+                <NumberBox
+                    AutomationProperties.AutomationId="OperatorTempoNumberBox"
+                    Header="Tempo (%)"
+                    Maximum="200"
+                    Minimum="50"
+                    SpinButtonPlacementMode="Inline"
+                    Value="{x:Bind ViewModel.TempoPercent, Mode=TwoWay}" />
+            </StackPanel>
+
+            <!-- Right: reservation queue -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    Grid.Row="0"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Reservation queue" />
+
+                <ListView
+                    Grid.Row="1"
+                    AutomationProperties.AutomationId="OperatorReservationList"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    ItemsSource="{x:Bind ViewModel.ReservationQueue}" />
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>
