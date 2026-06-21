@@ -1,0 +1,66 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# .NET
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+*.rsuser
+*.userprefs
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+!packages/build/
+
+# Test / coverage
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+
+# MSIX / packaging
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.cer
+*.pfx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific: bundled content / large media are kept out of git.
+# (SoundFonts, background media, and imported MIDI/KAR live under assets/ at runtime.)
+/assets/soundfonts/*.sf2
+/assets/soundfonts/*.sf3
+/assets/backgrounds/*
+/library/

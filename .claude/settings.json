@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(dotnet:*)",
+      "Bash(git:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(gh workflow:*)",
+      "Bash(gh repo view:*)",
+      "Bash(gh repo clone:*)",
+      "Bash(gh browse:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Read",
+      "Edit",
+      "Write"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(gh repo delete:*)"
+    ]
+  }
+}
