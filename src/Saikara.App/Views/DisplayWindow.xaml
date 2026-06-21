@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Saikara.App.Views.DisplayWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!-- Background placeholder: a static gradient (REQUIREMENTS §5 — static image /
+         gradient first, looping video later). Telop and pitch bar sit on top. -->
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0.0" Color="#FF101830" />
+                <GradientStop Offset="1.0" Color="#FF000000" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Lyric telop area (two-line, color-wipe wiring lands in P2) -->
+        <StackPanel
+            Grid.Row="0"
+            Margin="48"
+            VerticalAlignment="Center"
+            Spacing="16">
+            <TextBlock
+                AutomationProperties.AutomationId="DisplayCurrentLyric"
+                FontSize="56"
+                FontWeight="SemiBold"
+                Foreground="#FFFFFFFF"
+                Text="{x:Bind ViewModel.CurrentLyricLine, Mode=OneWay}"
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+            <TextBlock
+                AutomationProperties.AutomationId="DisplayNextLyric"
+                FontSize="40"
+                FontWeight="SemiBold"
+                Foreground="#B3FFFFFF"
+                Text="{x:Bind ViewModel.NextLyricLine, Mode=OneWay}"
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Real-time pitch bar placeholder (driven by the Core pitch detector in P3) -->
+        <ProgressBar
+            Grid.Row="1"
+            Margin="48,0"
+            AutomationProperties.AutomationId="DisplayPitchBar"
+            Maximum="1.0"
+            Minimum="0.0"
+            Value="{x:Bind ViewModel.PitchPosition, Mode=OneWay}" />
+
+        <!-- Status strip -->
+        <TextBlock
+            Grid.Row="2"
+            Margin="48,16,48,24"
+            FontSize="12"
+            Foreground="#80FFFFFF"
+            Text="Display output — secondary monitor"
+            TextAlignment="Center" />
+    </Grid>
+</Window>
